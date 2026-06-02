@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using Microsoft.Extensions.AI;
+using Phelix.Core.Telemetry;
 using Phelix.Core.Tools;
 
 namespace Phelix.Core.Agent;
@@ -50,72 +52,104 @@ public class AgentLoop(IChatClient chatClient, AgentOptions options, ToolRegistr
         Func<string, Task>? onChunk = null,
         CancellationToken cancellationToken = default)
     {
+        using Activity? turn = PhelixTelemetry.Source.StartActivity(PhelixTelemetry.Spans.Turn);
+        turn?.SetTag(PhelixTelemetry.Tags.Turn.ModelId, options.ModelId);
+
         List<ChatMessage> messages = new List<ChatMessage>(conversationHistory)
-        {
-            new(ChatRole.User, userMessage)
-        };
+          {
+              new(ChatRole.User, userMessage)
+          };
 
         ChatOptions chatOptions = new ChatOptions
         {
             ModelId = options.ModelId,
+            Instructions = options.SystemPrompt,
             Tools = toolRegistry?.ToAITools()
         };
 
         int toolTurns = 0;
+        int totalInputTokens = 0;
+        int totalOutputTokens = 0;
 
-        while (true)
+        try
         {
-            ChatResponse response = await chatClient.GetResponseAsync(messages, chatOptions, cancellationToken);
-
-            ChatMessage assistantMessage = response.Messages[^1];
-
-            if (response.FinishReason != ChatFinishReason.ToolCalls || toolRegistry is null)
+            while (true)
             {
-                // Final response — stream it if a callback was provided, then return.
-                if (onChunk is not null && assistantMessage.Text is not null)
-                    await onChunk(assistantMessage.Text);
+                ChatResponse response = await chatClient.GetResponseAsync(messages, chatOptions, cancellationToken);
 
-                messages.Add(assistantMessage);
-                return new Turn(messages, response, DateTimeOffset.UtcNow);
-            }
+                totalInputTokens += (int)(response.Usage?.InputTokenCount ?? 0);
+                totalOutputTokens += (int)(response.Usage?.OutputTokenCount ?? 0);
 
-            if (toolTurns >= options.MaxTurns)
-            {
-                messages.Add(assistantMessage);
-                return new Turn(messages, response, DateTimeOffset.UtcNow);
-            }
+                ChatMessage assistantMessage = response.Messages[^1];
 
-            // Append the assistant message containing the tool call requests.
-            messages.Add(assistantMessage);
-
-            // Execute each tool call and collect results.
-            List<AIContent> toolResults = new List<AIContent>();
-
-            foreach (AIContent content in assistantMessage.Contents)
-            {
-                if (content is not FunctionCallContent call)
-                    continue;
-
-                string result;
-
-                if (toolRegistry.TryGet(call.Name, out ITool? tool))
+                if (response.FinishReason != ChatFinishReason.ToolCalls || toolRegistry is null)
                 {
-                    IReadOnlyDictionary<string, object?> args = call.Arguments is not null
-                        ? new Dictionary<string, object?>(call.Arguments, StringComparer.Ordinal)
-                        : new Dictionary<string, object?>();
+                    if (onChunk is not null && assistantMessage.Text is not null)
+                        await onChunk(assistantMessage.Text);
 
-                    result = await tool!.ExecuteAsync(args, cancellationToken);
-                }
-                else
-                {
-                    result = $"Error: no tool named '{call.Name}' is registered.";
+                    messages.Add(assistantMessage);
+
+                    turn?.SetTag(PhelixTelemetry.Tags.Turn.ToolTurns, toolTurns);
+                    turn?.SetTag(PhelixTelemetry.Tags.Turn.InputTokens, totalInputTokens);
+                    turn?.SetTag(PhelixTelemetry.Tags.Turn.OutputTokens, totalOutputTokens);
+
+                    return new Turn(messages, response, DateTimeOffset.UtcNow);
                 }
 
-                toolResults.Add(new FunctionResultContent(call.CallId, result));
-            }
+                if (toolTurns >= options.MaxTurns)
+                {
+                    messages.Add(assistantMessage);
 
-            messages.Add(new ChatMessage(ChatRole.Tool, toolResults));
-            toolTurns++;
+                    turn?.SetTag(PhelixTelemetry.Tags.Turn.ToolTurns, toolTurns);
+                    turn?.SetTag(PhelixTelemetry.Tags.Turn.InputTokens, totalInputTokens);
+                    turn?.SetTag(PhelixTelemetry.Tags.Turn.OutputTokens, totalOutputTokens);
+
+                    return new Turn(messages, response, DateTimeOffset.UtcNow);
+                }
+
+                messages.Add(assistantMessage);
+
+                List<AIContent> toolResults = [];
+
+                foreach (AIContent content in assistantMessage.Contents)
+                {
+                    if (content is not FunctionCallContent call)
+                        continue;
+
+                    string result;
+
+                    using (Activity? toolCall = PhelixTelemetry.Source.StartActivity(PhelixTelemetry.Spans.ToolCall))
+                    {
+                        toolCall?.SetTag(PhelixTelemetry.Tags.Tool.Name, call.Name);
+
+                        if (toolRegistry.TryGet(call.Name, out ITool? tool))
+                        {
+                            IReadOnlyDictionary<string, object?> args = call.Arguments is not null
+                                ? new Dictionary<string, object?>(call.Arguments, StringComparer.Ordinal)
+                                : new Dictionary<string, object?>();
+
+                            result = await tool!.ExecuteAsync(args, cancellationToken);
+                            toolCall?.SetTag(PhelixTelemetry.Tags.Tool.Success, true);
+                        }
+                        else
+                        {
+                            result = $"Error: no tool named '{call.Name}' is registered.";
+                            toolCall?.SetTag(PhelixTelemetry.Tags.Tool.Success, false);
+                            toolCall?.SetTag(PhelixTelemetry.Tags.Tool.Error, result);
+                        }
+                    }
+
+                    toolResults.Add(new FunctionResultContent(call.CallId, result));
+                }
+
+                messages.Add(new ChatMessage(ChatRole.Tool, toolResults));
+                toolTurns++;
+            }
+        }
+        catch (Exception ex)
+        {
+            turn?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            throw;
         }
     }
 }
