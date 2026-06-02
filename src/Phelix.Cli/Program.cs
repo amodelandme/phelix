@@ -1,62 +1,76 @@
 ﻿using System.ClientModel;
-using Microsoft.Extensions.AI;
-using OpenAI;
-using Phelix.Core.Agent;
-using Phelix.Core.Session;
-using Phelix.Core.Tools;
-using Phelix.Tui;
+  using Microsoft.Extensions.AI;
+  using OpenAI;
+  using OpenTelemetry;
+  using OpenTelemetry.Resources;
+  using OpenTelemetry.Trace;
+  using Phelix.Core.Agent;
+  using Phelix.Core.Session;
+  using Phelix.Core.Telemetry;
+  using Phelix.Core.Tools;
+  using Phelix.Tui;
 
-OpenAIClient openAiClient = new(
-    new ApiKeyCredential(Environment.GetEnvironmentVariable("OPENROUTER_API_KEY")!),
-    new OpenAIClientOptions { Endpoint = new Uri("https://openrouter.ai/api/v1") }
-);
+  string? otlpEndpoint = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT");
 
-IChatClient chatClient = openAiClient.GetChatClient("google/gemma-4-31b-it:free").AsIChatClient();
+  using TracerProvider? tracerProvider = otlpEndpoint is not null
+      ? Sdk.CreateTracerProviderBuilder()
+          .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("phelix"))
+          .AddSource(PhelixTelemetry.SourceName)
+          .AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint))
+          .Build()
+      : null;
 
-AgentOptions agentOptions = new()
-{
-    ModelId = "google/gemma-4-31b-it:free",
-    SystemPrompt = "You are a helpful coding assistant."
-};
+  OpenAIClient openAiClient = new(
+      new ApiKeyCredential(Environment.GetEnvironmentVariable("OPENROUTER_API_KEY")!),
+      new OpenAIClientOptions { Endpoint = new Uri("https://openrouter.ai/api/v1") }
+  );
 
-ToolRegistry toolRegistry = new();
-toolRegistry.Register(new ReadFileTool());
+  // Potential prompt injection vector if ModelId is user-controlled — in production, validate against allowlist or use separate credentials per model.
+  IChatClient chatClient = new ChatClientBuilder(
+          openAiClient.GetChatClient("moonshotai/kimi-k2.6:free").AsIChatClient())
+      .UseOpenTelemetry(loggerFactory: null, sourceName: PhelixTelemetry.SourceName)
+      .Build();
 
-AgentLoop agentLoop = new(chatClient, agentOptions, toolRegistry);
+  AgentOptions agentOptions = new()
+  {
+      ModelId = "moonshotai/kimi-k2.6:free",
+      SystemPrompt = "You are a helpful coding assistant."
+  };
 
-// The full conversation history, grown turn by turn and passed into every model call.
-// The model has no memory of its own — this list IS the memory.
-List<ChatMessage> conversationHistory = new();
+  ToolRegistry toolRegistry = new();
+  toolRegistry.Register(new ReadFileTool());
 
-Console.WriteLine("Phelix — type 'exit' to quit.");
-Console.WriteLine();
+  AgentLoop agentLoop = new(chatClient, agentOptions, toolRegistry);
 
-while (true)
-{
-    Console.Write("> ");
-    string? rawInput = Console.ReadLine();
+  List<ChatMessage> conversationHistory = new();
 
-    if (rawInput is null || rawInput.Trim().Equals("exit", StringComparison.OrdinalIgnoreCase))
-        break;
+  Console.WriteLine("Phelix — type 'exit' to quit.");
+  Console.WriteLine();
 
-    string userPrompt = rawInput.Trim();
+  while (true)
+  {
+      Console.Write("> ");
+      string? rawInput = Console.ReadLine();
 
-    if (string.IsNullOrEmpty(userPrompt))
-        continue;
+      if (rawInput is null || rawInput.Trim().Equals("exit", StringComparison.OrdinalIgnoreCase))
+          break;
 
-    Turn completedTurn = await agentLoop.RunTurnAsync(conversationHistory, userPrompt, TerminalRenderer.WriteChunk);
+      string userPrompt = rawInput.Trim();
 
-    Console.WriteLine();
+      if (string.IsNullOrEmpty(userPrompt))
+          continue;
 
-    // Turn.Messages already contains the full history plus the new user message.
-    // Append only the assistant reply — that's the one piece RunTurnAsync doesn't add.
-    List<ChatMessage> updatedHistory = new(completedTurn.Messages)
-    {
-        new(ChatRole.Assistant, completedTurn.Response.Text ?? string.Empty)
-    };
-    conversationHistory = updatedHistory;
+      Turn completedTurn = await agentLoop.RunTurnAsync(conversationHistory, userPrompt, TerminalRenderer.WriteChunk);
 
-    await SessionLogger.AppendAsync(completedTurn, userPrompt);
-}
+      Console.WriteLine();
 
-return 0;
+      List<ChatMessage> updatedHistory = new(completedTurn.Messages)
+      {
+          new(ChatRole.Assistant, completedTurn.Response.Text ?? string.Empty)
+      };
+      conversationHistory = updatedHistory;
+
+      await SessionLogger.AppendAsync(completedTurn, userPrompt);
+  }
+
+  return 0;
