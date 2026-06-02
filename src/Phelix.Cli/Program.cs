@@ -39,6 +39,10 @@
 
   ToolRegistry toolRegistry = new();
   toolRegistry.Register(new ReadFileTool());
+  toolRegistry.Register(new WriteFileTool());
+  toolRegistry.Register(new RunCommandTool());
+  toolRegistry.Register(new ListFilesTool());
+  toolRegistry.Register(new SearchCodeTool());
 
   AgentLoop agentLoop = new(chatClient, agentOptions, toolRegistry);
 
