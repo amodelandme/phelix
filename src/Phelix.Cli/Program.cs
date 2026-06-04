@@ -1,80 +1,86 @@
 ﻿using System.ClientModel;
-  using Microsoft.Extensions.AI;
-  using OpenAI;
-  using OpenTelemetry;
-  using OpenTelemetry.Resources;
-  using OpenTelemetry.Trace;
-  using Phelix.Core.Agent;
-  using Phelix.Core.Session;
-  using Phelix.Core.Telemetry;
-  using Phelix.Core.Tools;
-  using Phelix.Tui;
+using Microsoft.Extensions.AI;
+using OpenAI;
+using OpenTelemetry;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+using Phelix.Core.Agent;
+using Phelix.Core.Session;
+using Phelix.Core.Telemetry;
+using Phelix.Core.Tools;
+using Phelix.Tui;
 
-  string? otlpEndpoint = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT");
+//////////////////////////////////////////////////////////////////
+const string SYSTEM_PROMPT = @"You are a helpful assistant with access to tools.
+Use tools whenever they help you give a more accurate answer.
+When you have enough information, respond directly and concisely.";
+///////////////////////////////////////////////////////////////////
 
-  using TracerProvider? tracerProvider = otlpEndpoint is not null
-      ? Sdk.CreateTracerProviderBuilder()
-          .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("phelix"))
-          .AddSource(PhelixTelemetry.SourceName)
-          .AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint))
-          .Build()
-      : null;
+string? otlpEndpoint = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT");
 
-  OpenAIClient openAiClient = new(
-      new ApiKeyCredential(Environment.GetEnvironmentVariable("OPENROUTER_API_KEY")!),
-      new OpenAIClientOptions { Endpoint = new Uri("https://openrouter.ai/api/v1") }
-  );
+using TracerProvider? tracerProvider = otlpEndpoint is not null
+    ? Sdk.CreateTracerProviderBuilder()
+        .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("phelix"))
+        .AddSource(PhelixTelemetry.SourceName)
+        .AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint))
+        .Build()
+    : null;
 
-  // Potential prompt injection vector if ModelId is user-controlled — in production, validate against allowlist or use separate credentials per model.
-  IChatClient chatClient = new ChatClientBuilder(
-          openAiClient.GetChatClient("moonshotai/kimi-k2.6:free").AsIChatClient())
-      .UseOpenTelemetry(loggerFactory: null, sourceName: PhelixTelemetry.SourceName)
-      .Build();
+OpenAIClient openAiClient = new(
+    new ApiKeyCredential(Environment.GetEnvironmentVariable("OPENROUTER_API_KEY")!),
+    new OpenAIClientOptions { Endpoint = new Uri("https://openrouter.ai/api/v1") }
+);
 
-  AgentOptions agentOptions = new()
-  {
-      ModelId = "moonshotai/kimi-k2.6:free",
-      SystemPrompt = "You are a helpful coding assistant."
-  };
+// Potential prompt injection vector if ModelId is user-controlled — in production, validate against allowlist or use separate credentials per model.
+IChatClient chatClient = new ChatClientBuilder(
+        openAiClient.GetChatClient("moonshotai/kimi-k2.6:free").AsIChatClient())
+    .UseOpenTelemetry(loggerFactory: null, sourceName: PhelixTelemetry.SourceName)
+    .Build();
 
-  ToolRegistry toolRegistry = new();
-  toolRegistry.Register(new ReadFileTool());
-  toolRegistry.Register(new WriteFileTool());
-  toolRegistry.Register(new RunCommandTool());
-  toolRegistry.Register(new ListFilesTool());
-  toolRegistry.Register(new SearchCodeTool());
+AgentOptions agentOptions = new()
+{
+    ModelId = "moonshotai/kimi-k2.6:free",
+    SystemPrompt = SYSTEM_PROMPT,
+};
 
-  AgentLoop agentLoop = new(chatClient, agentOptions, toolRegistry);
+ToolRegistry toolRegistry = new();
+toolRegistry.Register(new ReadFileTool());
+toolRegistry.Register(new WriteFileTool());
+toolRegistry.Register(new RunCommandTool());
+toolRegistry.Register(new ListFilesTool());
+toolRegistry.Register(new SearchCodeTool());
 
-  List<ChatMessage> conversationHistory = new();
+AgentLoop agentLoop = new(chatClient, agentOptions, toolRegistry);
 
-  Console.WriteLine("Phelix — type 'exit' to quit.");
-  Console.WriteLine();
+List<ChatMessage> conversationHistory = new();
 
-  while (true)
-  {
-      Console.Write("> ");
-      string? rawInput = Console.ReadLine();
+Console.WriteLine("Phelix — type 'exit' to quit.");
+Console.WriteLine();
 
-      if (rawInput is null || rawInput.Trim().Equals("exit", StringComparison.OrdinalIgnoreCase))
-          break;
+while (true)
+{
+    Console.Write("> ");
+    string? rawInput = Console.ReadLine();
 
-      string userPrompt = rawInput.Trim();
+    if (rawInput is null || rawInput.Trim().Equals("exit", StringComparison.OrdinalIgnoreCase))
+        break;
 
-      if (string.IsNullOrEmpty(userPrompt))
-          continue;
+    string userPrompt = rawInput.Trim();
 
-      Turn completedTurn = await agentLoop.RunTurnAsync(conversationHistory, userPrompt, TerminalRenderer.WriteChunk);
+    if (string.IsNullOrEmpty(userPrompt))
+        continue;
 
-      Console.WriteLine();
+    Turn completedTurn = await agentLoop.RunTurnAsync(conversationHistory, userPrompt, TerminalRenderer.WriteChunk);
 
-      List<ChatMessage> updatedHistory = new(completedTurn.Messages)
+    Console.WriteLine();
+
+    List<ChatMessage> updatedHistory = new(completedTurn.Messages)
       {
           new(ChatRole.Assistant, completedTurn.Response.Text ?? string.Empty)
       };
-      conversationHistory = updatedHistory;
+    conversationHistory = updatedHistory;
 
-      await SessionLogger.AppendAsync(completedTurn, userPrompt);
-  }
+    await SessionLogger.AppendAsync(completedTurn, userPrompt);
+}
 
-  return 0;
+return 0;
