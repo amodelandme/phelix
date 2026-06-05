@@ -2,11 +2,11 @@ using Phelix.Core.Tools;
 
 namespace Phelix.Core.Tests.Tools;
 
-public class RunCommandToolTests : IDisposable
+public class BashToolTests : IDisposable
 {
     private readonly string _root;
 
-    public RunCommandToolTests()
+    public BashToolTests()
     {
         _root = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         Directory.CreateDirectory(_root);
@@ -14,12 +14,12 @@ public class RunCommandToolTests : IDisposable
 
     public void Dispose() => Directory.Delete(_root, recursive: true);
 
-    private RunCommandTool Tool() => new(_root);
+    private BashTool Tool() => new(_root);
 
     [Fact]
-    public async Task RunCommandTool_SuccessfulCommand_ReturnsExitCodeZeroAndOutput()
+    public async Task BashTool_SuccessfulCommand_ReturnsExitCodeZeroAndOutput()
     {
-        RunCommandTool tool = Tool();
+        BashTool tool = Tool();
 
         string result = await tool.ExecuteAsync(
             new Dictionary<string, object?> { ["command"] = "echo hello" },
@@ -30,9 +30,9 @@ public class RunCommandToolTests : IDisposable
     }
 
     [Fact]
-    public async Task RunCommandTool_FailingCommand_ReturnsNonZeroExitCode()
+    public async Task BashTool_FailingCommand_ReturnsNonZeroExitCode()
     {
-        RunCommandTool tool = Tool();
+        BashTool tool = Tool();
 
         string result = await tool.ExecuteAsync(
             new Dictionary<string, object?> { ["command"] = "exit 1" },
@@ -42,9 +42,9 @@ public class RunCommandToolTests : IDisposable
     }
 
     [Fact]
-    public async Task RunCommandTool_CommandWritesToStderr_CapturesIt()
+    public async Task BashTool_CommandWritesToStderr_CapturesIt()
     {
-        RunCommandTool tool = Tool();
+        BashTool tool = Tool();
 
         string result = await tool.ExecuteAsync(
             new Dictionary<string, object?> { ["command"] = "echo error_output >&2" },
@@ -54,11 +54,11 @@ public class RunCommandToolTests : IDisposable
     }
 
     [Fact]
-    public async Task RunCommandTool_WorkingDirectoryRespected_PwdMatchesSubdir()
+    public async Task BashTool_WorkingDirectoryRespected_PwdMatchesSubdir()
     {
         string subdir = Path.Combine(_root, "subdir");
         Directory.CreateDirectory(subdir);
-        RunCommandTool tool = Tool();
+        BashTool tool = Tool();
 
         string result = await tool.ExecuteAsync(
             new Dictionary<string, object?>
@@ -73,9 +73,9 @@ public class RunCommandToolTests : IDisposable
     }
 
     [Fact]
-    public async Task RunCommandTool_WorkingDirectoryOutsideRoot_ReturnsError()
+    public async Task BashTool_WorkingDirectoryOutsideRoot_ReturnsError()
     {
-        RunCommandTool tool = Tool();
+        BashTool tool = Tool();
         string outsideDir = Path.GetTempPath();
 
         string result = await tool.ExecuteAsync(
@@ -91,9 +91,9 @@ public class RunCommandToolTests : IDisposable
     }
 
     [Fact]
-    public async Task RunCommandTool_TimeoutExceeded_ReturnsTimeoutError()
+    public async Task BashTool_TimeoutExceeded_ReturnsTimeoutError()
     {
-        RunCommandTool tool = Tool();
+        BashTool tool = Tool();
 
         string result = await tool.ExecuteAsync(
             new Dictionary<string, object?>
@@ -108,9 +108,9 @@ public class RunCommandToolTests : IDisposable
     }
 
     [Fact]
-    public async Task RunCommandTool_MissingCommandParameter_ReturnsError()
+    public async Task BashTool_MissingCommandParameter_ReturnsError()
     {
-        RunCommandTool tool = Tool();
+        BashTool tool = Tool();
 
         string result = await tool.ExecuteAsync(
             new Dictionary<string, object?>(),
