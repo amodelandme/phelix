@@ -4,14 +4,14 @@ using Microsoft.Extensions.AI;
 namespace Phelix.Core.Tools;
 
 /// <summary>
-/// Runs a shell command and returns its combined stdout and stderr output.
+/// Runs a bash command and returns its combined stdout and stderr output.
 /// </summary>
 /// <remarks>
 /// Executes via <c>/bin/sh -c</c>. The working directory defaults to
 /// <see cref="RootDirectory"/> and is validated against it before execution.
 /// Commands run with the current user's permissions — no sandboxing in MVP.
 /// </remarks>
-public class RunCommandTool : ITool
+public class BashTool : ITool
 {
     const int DefaultTimeoutSeconds = 30;
     const int MaxTimeoutSeconds = 120;
@@ -20,16 +20,16 @@ public class RunCommandTool : ITool
     public string RootDirectory { get; }
 
     /// <inheritdoc/>
-    public string Name => "run_command";
+    public string Name => "bash";
 
     /// <inheritdoc/>
-    public string Description => "Runs a shell command and returns its exit code and combined stdout/stderr output. The working directory must be within the allowed root. Commands run as the current user with no sandboxing.";
+    public string Description => "Runs a bash command and returns its exit code and combined stdout/stderr output. The working directory must be within the allowed root. Commands run as the current user with no sandboxing.";
 
     /// <param name="rootDirectory">
     /// Absolute path of the default working directory and confinement root.
     /// Defaults to <see cref="Directory.GetCurrentDirectory"/> when <c>null</c>.
     /// </param>
-    public RunCommandTool(string? rootDirectory = null) =>
+    public BashTool(string? rootDirectory = null) =>
         RootDirectory = Path.GetFullPath(rootDirectory ?? Directory.GetCurrentDirectory());
 
     /// <inheritdoc/>
@@ -143,5 +143,4 @@ public class RunCommandTool : ITool
             },
             Name,
             Description);
-
 }
