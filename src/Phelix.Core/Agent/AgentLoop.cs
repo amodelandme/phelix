@@ -75,7 +75,17 @@ public class AgentLoop(IChatClient chatClient, AgentOptions options, ToolRegistr
         {
             while (true)
             {
-                ChatResponse response = await chatClient.GetResponseAsync(messages, chatOptions, cancellationToken);
+                List<ChatResponseUpdate> updates = new();
+
+                await foreach (ChatResponseUpdate update in chatClient.GetStreamingResponseAsync(messages, chatOptions, cancellationToken))
+                {
+                    if (onChunk is not null && !string.IsNullOrEmpty(update.Text))
+                        await onChunk(update.Text);
+
+                    updates.Add(update);
+                }
+
+                ChatResponse response = updates.ToChatResponse();
 
                 totalInputTokens += (int)(response.Usage?.InputTokenCount ?? 0);
                 totalOutputTokens += (int)(response.Usage?.OutputTokenCount ?? 0);
@@ -84,9 +94,6 @@ public class AgentLoop(IChatClient chatClient, AgentOptions options, ToolRegistr
 
                 if (response.FinishReason != ChatFinishReason.ToolCalls || toolRegistry is null)
                 {
-                    if (onChunk is not null && assistantMessage.Text is not null)
-                        await onChunk(assistantMessage.Text);
-
                     messages.Add(assistantMessage);
 
                     turn?.SetTag(PhelixTelemetry.Tags.Turn.ToolTurns, toolTurns);
