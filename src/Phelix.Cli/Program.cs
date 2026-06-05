@@ -72,9 +72,9 @@
       {
           new(ChatRole.Assistant, completedTurn.Response.Text ?? string.Empty)
       };
-      conversationHistory = updatedHistory;
+    conversationHistory = updatedHistory;
 
-      await SessionLogger.AppendAsync(completedTurn, userPrompt);
-  }
+    await SessionLogger.AppendAsync(completedTurn, userPrompt);
+}
 
-  return 0;
+return 0;
