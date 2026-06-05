@@ -75,11 +75,39 @@ Goal: The agent can call a tool, get a result back, and use that result in the n
 
 ---
 
-## Up Next — Phase 3
+### Session 6 — 2026-06-02 (Phase 3 — Observability)
+- Added OpenTelemetry tracing via `Microsoft.Extensions.AI` + OTLP exporter
+- Wrote `PhelixTelemetry.cs` — `ActivitySource` and all span/tag name constants
+- Wired turn span (`phelix.agent.turn`) and per-tool-call span (`phelix.tool.call`) in `AgentLoop`
+- Accumulated input/output token counts across all model calls in a turn; written to span at return
+- Registered `TracerProvider` in `Program.cs` — activated only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set; zero-cost when disabled
+- Verified end-to-end in Jaeger: parent/child nesting correct, token counts accurate
 
-- End-to-end validation of tool dispatch (requires live API call with a model that supports tool use)
-- Second tool (e.g. `ListDirectoryTool`) to exercise multi-tool registry
-- Spec/decision doc workflow: `docs/decisions/<feature>/spec.md` before implementation, `implementation-notes.md` after
+**Key discovery:** `UseOpenTelemetry` must be called on `ChatClientBuilder`, not on `IChatClient` directly. The correct pattern is `new ChatClientBuilder(...).UseOpenTelemetry(...).Build()`.
+
+### Session 6 (continued) — 2026-06-02 (Phase 4 — Tool Expansion)
+- Added `WriteFileTool`, `RunCommandTool`, `ListFilesTool`, `SearchCodeTool`
+- Registered all four tools in `Program.cs`
+- Wrote tests for all new tools (38 tests total across tool suite)
+- Added GitHub Actions CI workflow — build and test on push/PR
+
+**Key decision:** Specialized tools (`read_file`, `write_file`, `list_files`, `search_code`) are candidates for removal in favour of a single bash tool. Reasoning: minimal harness — bash is the right primitive, specialized tools become user-added extensions. Decision not yet locked; spec to be written in `docs/decisions/` when ready.
+
+### Session 7 — 2026-06-03
+- Fixed fake streaming in `AgentLoop` — replaced `GetResponseAsync` with `GetStreamingResponseAsync`; tokens now forwarded to `onChunk` as they arrive; updates aggregated via `ToChatResponse()` to preserve finish reason, usage, and tool call reconstruction
+- Added `SessionLoggerTests` — two-turn mock session and standalone JSONL line parseability; no network required
+- Fixed indentation in `Program.cs`; expanded system prompt to encourage tool use and concise responses
+- PRs opened: #6 (streaming fix + session logger tests), #7 (CLI housekeeping)
+
+**Key discovery:** `AddMessagesAsync` consumes the stream but discards the `ChatResponse` (no usage data). Manual iteration + `ToChatResponse()` is required to preserve finish reason and token counts.
+
+---
+
+## Up Next
+
+- Lock decision on tool consolidation (bash tool replacing specialized tools) — write spec in `docs/decisions/` first
+- Resilience pipeline: retry / circuit breaker via `ChatClientBuilder` middleware in `Program.cs`
+- Config layer: move magic strings (`ModelId`, `SystemPrompt`) out of `Program.cs`
 
 ---
 
