@@ -40,7 +40,7 @@
   ToolRegistry toolRegistry = new();
   toolRegistry.Register(new ReadFileTool());
   toolRegistry.Register(new WriteFileTool());
-  toolRegistry.Register(new RunCommandTool());
+  toolRegistry.Register(new BashTool());
   toolRegistry.Register(new ListFilesTool());
   toolRegistry.Register(new SearchCodeTool());
 
