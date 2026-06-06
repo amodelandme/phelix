@@ -92,29 +92,16 @@ public class AgentLoop(IChatClient chatClient, AgentOptions options, ToolRegistr
 
                 ChatMessage assistantMessage = response.Messages[^1];
 
-                if (response.FinishReason != ChatFinishReason.ToolCalls || toolRegistry is null)
-                {
-                    messages.Add(assistantMessage);
-
-                    turn?.SetTag(PhelixTelemetry.Tags.Turn.ToolTurns, toolTurns);
-                    turn?.SetTag(PhelixTelemetry.Tags.Turn.InputTokens, totalInputTokens);
-                    turn?.SetTag(PhelixTelemetry.Tags.Turn.OutputTokens, totalOutputTokens);
-
-                    return new Turn(messages, response, DateTimeOffset.UtcNow);
-                }
-
-                if (toolTurns >= options.MaxTurns)
-                {
-                    messages.Add(assistantMessage);
-
-                    turn?.SetTag(PhelixTelemetry.Tags.Turn.ToolTurns, toolTurns);
-                    turn?.SetTag(PhelixTelemetry.Tags.Turn.InputTokens, totalInputTokens);
-                    turn?.SetTag(PhelixTelemetry.Tags.Turn.OutputTokens, totalOutputTokens);
-
-                    return new Turn(messages, response, DateTimeOffset.UtcNow);
-                }
-
                 messages.Add(assistantMessage);
+
+                if (response.FinishReason != ChatFinishReason.ToolCalls || toolRegistry is null || toolTurns >= options.MaxTurns)
+                {
+                    turn?.SetTag(PhelixTelemetry.Tags.Turn.ToolTurns, toolTurns);
+                    turn?.SetTag(PhelixTelemetry.Tags.Turn.InputTokens, totalInputTokens);
+                    turn?.SetTag(PhelixTelemetry.Tags.Turn.OutputTokens, totalOutputTokens);
+
+                    return new Turn(messages, response, DateTimeOffset.UtcNow);
+                }
 
                 List<AIContent> toolResults = [];
 
@@ -133,7 +120,7 @@ public class AgentLoop(IChatClient chatClient, AgentOptions options, ToolRegistr
                         {
                             IReadOnlyDictionary<string, object?> args = call.Arguments is not null
                                 ? new Dictionary<string, object?>(call.Arguments, StringComparer.Ordinal)
-                                : new Dictionary<string, object?>();
+                                : [];
 
                             result = await tool!.ExecuteAsync(args, cancellationToken);
                             toolCall?.SetTag(PhelixTelemetry.Tags.Tool.Success, true);

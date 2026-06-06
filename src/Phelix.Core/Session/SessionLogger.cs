@@ -18,6 +18,8 @@ public static class SessionLogger
         ".phelix", "sessions"
     );
 
+    static readonly string SessionId = Guid.NewGuid().ToString("N");
+
     static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -51,12 +53,12 @@ public static class SessionLogger
     }
 
     /// <summary>
-    /// Returns a path like <c>~/.phelix/sessions/2026-05-31.jsonl</c>.
-    /// One file per calendar day groups sessions naturally without collisions.
+    /// Returns a path like <c>~/.phelix/sessions/2026-05-31-&lt;sessionId&gt;.jsonl</c>.
+    /// The session ID is a process-lifetime UUID — one file per run, date-prefixed for sorting.
     /// </summary>
     static string DefaultFilePath()
     {
-        string fileName = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd") + ".jsonl";
+        string fileName = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd") + $"-{SessionId}.jsonl";
         return Path.Combine(SessionDir, fileName);
     }
 }

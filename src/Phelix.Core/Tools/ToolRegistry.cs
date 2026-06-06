@@ -8,15 +8,19 @@ namespace Phelix.Core.Tools;
 public class ToolRegistry
 {
     private readonly Dictionary<string, ITool> _tools = new(StringComparer.Ordinal);
+    private readonly List<AITool> _aiTools = new();
 
     /// <summary>
-    /// Registers <paramref name="tool"/> by its <see cref="ITool.Name"/>.
-    /// Throws <see cref="ArgumentException"/> if a tool with the same name is already registered.
+    /// Registers <paramref name="tool"/> by its <see cref="ITool.Name"/> and caches its
+    /// <see cref="AITool"/> representation. Throws <see cref="ArgumentException"/> if a tool
+    /// with the same name is already registered.
     /// </summary>
     public void Register(ITool tool)
     {
         if (!_tools.TryAdd(tool.Name, tool))
             throw new ArgumentException($"A tool named '{tool.Name}' is already registered.", nameof(tool));
+
+        _aiTools.Add(tool.ToAITool());
     }
 
     /// <summary>
@@ -28,15 +32,9 @@ public class ToolRegistry
     public IReadOnlyCollection<ITool> All => _tools.Values;
 
     /// <summary>
-    /// Returns an <see cref="AITool"/> list suitable for passing to <see cref="ChatOptions.Tools"/>.
-    /// Each entry is produced by the corresponding <see cref="ITool.ToAITool"/> implementation,
-    /// which owns the correct parameter schema for that tool.
+    /// Returns the cached <see cref="AITool"/> list suitable for passing to <see cref="ChatOptions.Tools"/>.
+    /// The list is built at <see cref="Register"/> time so schema reflection is paid once at startup,
+    /// not on every model call.
     /// </summary>
-    public IList<AITool> ToAITools()
-    {
-        List<AITool> aiTools = new List<AITool>(_tools.Count);
-        foreach (ITool tool in _tools.Values)
-            aiTools.Add(tool.ToAITool());
-        return aiTools;
-    }
+    public IList<AITool> ToAITools() => _aiTools;
 }
