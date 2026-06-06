@@ -482,7 +482,4 @@ $RECYCLE.BIN/
 *.swp
 
 # Architecture/Agent files
-AGENTS.md
-docs/
-skills/
 .claude/

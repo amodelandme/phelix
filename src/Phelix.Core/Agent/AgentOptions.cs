@@ -10,7 +10,7 @@ namespace Phelix.Core.Agent;
 /// </remarks>
 public record AgentOptions
 {
-    const int MaxturnsDefault = 5;
+    const int MaxTurnsDefault = 5;
 
     /// <summary>
     /// The model identifier forwarded to the <see cref="Microsoft.Extensions.AI.IChatClient"/>.
@@ -28,5 +28,5 @@ public record AgentOptions
     /// Maximum number of turns the loop will execute before halting.
     /// Guards against runaway agentic sessions. Defaults to <c>5</c>.
     /// </summary>
-    public int MaxTurns { get; init; } = MaxturnsDefault;
+    public int MaxTurns { get; init; } = MaxTurnsDefault;
 }
