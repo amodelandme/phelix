@@ -20,8 +20,10 @@ namespace Phelix.Core.Agent;
 /// assistant message, token usage, and finish reason.
 /// </param>
 /// <param name="Timestamp">The UTC time at which the model response was received.</param>
+/// <param name="ExitReason">Why the turn stopped — natural completion or turn limit.</param>
 public record Turn(
     IReadOnlyList<ChatMessage> Messages,
     ChatResponse Response,
-    DateTimeOffset Timestamp
+    DateTimeOffset Timestamp,
+    TurnExitReason ExitReason = TurnExitReason.Completed
 );
