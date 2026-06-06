@@ -94,13 +94,16 @@ public class AgentLoop(IChatClient chatClient, AgentOptions options, ToolRegistr
 
                 messages.Add(assistantMessage);
 
-                if (response.FinishReason != ChatFinishReason.ToolCalls || toolRegistry is null || toolTurns >= options.MaxTurns)
+                bool limitReached = toolTurns >= options.MaxTurns && response.FinishReason == ChatFinishReason.ToolCalls;
+
+                if (response.FinishReason != ChatFinishReason.ToolCalls || toolRegistry is null || limitReached)
                 {
                     turn?.SetTag(PhelixTelemetry.Tags.Turn.ToolTurns, toolTurns);
                     turn?.SetTag(PhelixTelemetry.Tags.Turn.InputTokens, totalInputTokens);
                     turn?.SetTag(PhelixTelemetry.Tags.Turn.OutputTokens, totalOutputTokens);
 
-                    return new Turn(messages, response, DateTimeOffset.UtcNow);
+                    TurnExitReason exitReason = limitReached ? TurnExitReason.TurnLimitReached : TurnExitReason.Completed;
+                    return new Turn(messages, response, DateTimeOffset.UtcNow, exitReason);
                 }
 
                 List<AIContent> toolResults = [];

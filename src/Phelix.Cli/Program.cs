@@ -31,6 +31,9 @@ while (true)
 
         Console.WriteLine();
 
+        if (completedTurn.ExitReason == TurnExitReason.TurnLimitReached)
+            Console.WriteLine("[turn limit reached]");
+
         conversationHistory = completedTurn.Messages;
 
         await Phelix.Core.Session.SessionLogger.AppendAsync(completedTurn, userPrompt);
