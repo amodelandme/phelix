@@ -1,31 +1,41 @@
-# ListFilesTool — Relative Path Output: Implementation Notes
+# Tool Output Truncation + Ephemeral Tool Pattern: Implementation Notes
 
 **Date:** 2026-06-06
 
-## What changed
+---
 
-`ListFilesTool.ExecuteAsync` — one line changed in the `StringBuilder` loop:
+## Part 1 — Truncation helper
 
-```csharp
-// before
-sb.AppendLine(matches[i]);
+`AgentLoop.TruncateToolOutput(string result, int maxChars)` — public static method.
 
-// after
-sb.AppendLine(Path.GetRelativePath(RootDirectory, matches[i]));
-```
+- Called immediately after `tool.ExecuteAsync` returns, before the result is
+  stored in `toolCallRecords` or wrapped in `FunctionResultContent`.
+- `MaxToolOutputChars = 2000` — named constant on `AgentLoop`.
+- Head/tail split: first 80% of `maxChars` characters, then
+  `\n... [X chars truncated] ...\n`, then the last 20%.
+- Both the session log and the model receive the truncated value.
 
-`Path.GetRelativePath` computes the relative path from `RootDirectory` to each
-match. On a 65-file result with a 30-character root prefix, this removes roughly
-1,900 characters from every tool result — reducing both session log size and
-tokens sent to the model on subsequent turns.
+## Part 2 — Ephemeral tool pattern
 
-## Test added
+`Turn` gained a second messages property: `ContextMessages`.
 
-`ListFilesTool_ResultsAreRelativePaths` — creates `src/Foo.cs` under the temp
-root, asserts the result contains `src/Foo.cs` (platform separator) and does
-not contain the temp root path.
+- `Messages` — the full record, used by `SessionLogger`. Unchanged.
+- `ContextMessages` — the pruned list passed as history to the next turn.
+
+`AgentLoop.BuildContextMessages` filters `messages` before return:
+- Drops all `ChatRole.Tool` messages (raw tool results).
+- Drops all assistant messages whose entire `Contents` collection is
+  `FunctionCallContent` (tool-dispatch requests with no text).
+- Keeps user messages and any assistant message containing `TextContent`.
+
+`Program.cs` now passes `completedTurn.ContextMessages` as `conversationHistory`
+instead of `completedTurn.Messages`.
 
 ## Files touched
 
-- `src/Phelix.Core/Tools/ListFilesTool.cs`
-- `tests/Phelix.Core.Tests/Tools/ListFilesToolTests.cs`
+- `src/Phelix.Core/Agent/AgentLoop.cs` — truncation helper, `BuildContextMessages`, `MaxToolOutputChars`
+- `src/Phelix.Core/Agent/Turn.cs` — added `ContextMessages` property
+- `src/Phelix.Cli/Program.cs` — passes `ContextMessages` as history
+- `tests/Phelix.Core.Tests/Agent/AgentLoopTests.cs` — 8 new tests
+- `tests/Phelix.Core.Tests/Agent/Fakes.cs` — `FakeChatClient`, `FakeToolRegistry`, `FakeTool`
+- `tests/Phelix.Core.Tests/Session/SessionLoggerTests.cs` — updated `BuildFakeTurn` for new `Turn` constructor
