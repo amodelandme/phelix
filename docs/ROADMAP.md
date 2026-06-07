@@ -35,9 +35,8 @@ YAML config at `~/.phelix/config.yaml`; named provider and model profiles; `ICon
 ### ~~Retry / circuit breaker~~ ✓ done
 `RetryingChatClient` middleware in the `ChatClientBuilder` pipeline. Exponential backoff with ±20% jitter; retries on 429, 5xx, `TaskCanceledException`, `TimeoutException`, `IOException`. Streaming responses are buffered per attempt — no partial output on retry. Per-model `RetryPolicy` override with global fallback in config. Spec and implementation in `docs/decisions/retry-circuit-breaker/`.
 
-### AGENTS.md per-repo loading
-Support loading a per-project `AGENTS.md` from the working directory on startup and injecting it into the system prompt.
-- Small feature; no new infrastructure needed
+### ~~AGENTS.md per-repo loading~~ ✓ done — PR #21
+`AgentsMdLoader` reads `AGENTS.md` from the current working directory on startup and composes it with the base system prompt using XML-tagged sections. File absence is silent; read failures warn to stderr. Spec and implementation in `docs/decisions/agents-md-loading/`.
 
 ### Tiered approval friction
 All tool calls currently auto-execute.
