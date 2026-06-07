@@ -1,12 +1,12 @@
-# Phelix
+# Phelix - A .Net Agent Harness
 
-> A terminal-based AI coding harness for .NET developers.
+[![CI](https://github.com/amodelandme/phelix/actions/workflows/ci.yml/badge.svg)](https://github.com/amodelandme/phelix/actions/workflows/ci.yml) [![Last commit](https://img.shields.io/github/last-commit/amodelandme/phelix)](https://github.com/amodelandme/phelix/commits/main) ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4) ![License](https://img.shields.io/badge/license-MIT-green)
+
+> **Currently building:** tool output truncation · context compaction
 
 ---
 
-## What is Phelix?
-
-A control system that wraps a language model in a deterministic loop — reading your codebase, writing code, running builds, and feeding compiler results back into the next turn, all from your terminal.
+A terminal-based AI coding harness for .NET developers. Phelix wraps a language model in a deterministic loop — reading files, writing code, running builds, and feeding results back into the next turn.
 
 ```bash
 phelix "add OpenTelemetry tracing to the OrdersService"
@@ -14,102 +14,62 @@ phelix "add OpenTelemetry tracing to the OrdersService"
 
 ---
 
-## Why Phelix
+## How it works
 
-Phelix runs inside the compiler.
+```
+CLI prompt
+    └─ AgentLoop
+          ├─ model call (IChatClient)
+          ├─ tool dispatch  ←─ read files · write files · bash · search
+          └─ session log    ←─ full turn record written after every turn
+```
 
-Roslyn gives it a live semantic model of your solution — symbol resolution, diagnostics, syntax tree analysis. The same APIs Visual Studio uses, feeding directly into the agent loop.
+The loop runs until the model stops calling tools or a turn limit is hit. Every turn — tool calls, token usage, exit reason — is written to a JSONL session log at `~/.phelix/sessions/`.
 
 ---
 
-## Design Philosophy
+## Configuration
 
-**Primitives over features.** Phelix ships with the minimum viable control loop. Things like sub-agents, plan mode, and code review are built as skills or left to the user. The core stays small and easy to reason about.
+Provider and model profiles live in `~/.phelix/config.yaml`:
 
-**Configured in the repository.** Project guidance lives in a `PHELIX.md` file you write and commit. Skills are Markdown files. Tools are C# classes. Nothing lives in a cloud account.
+```yaml
+providers:
+  openrouter:
+    endpoint: https://openrouter.ai/api/v1
+    apiKeyEnvVar: OPENROUTER_API_KEY
 
-```markdown
-# PHELIX.md — OrdersService
-
-## Project
-ASP.NET Core 10 Web API. Clean Architecture. PostgreSQL via EF Core.
-
-## Skills
-- dotnet-webapi
-- efcore
-- opentelemetry
-
-## Constraints
-- Never modify files under /legacy
-- Always run `dotnet build` after changes to *.cs files
+models:
+  default:
+    provider: openrouter
+    modelId: anthropic/claude-sonnet-4-6
+  fast:
+    provider: openrouter
+    modelId: qwen/qwen3.5-flash-20260224
 ```
 
-**Model-agnostic.** Every provider is accessed through `Microsoft.Extensions.AI`'s `IChatClient`. Switching models is a one-line config change.
-
----
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────┐
-│                  CLI Entry Point                │
-│           Phelix.Cli / phelix (command)         │
-└────────────────────┬────────────────────────────┘
-                     │
-┌────────────────────▼────────────────────────────┐
-│                  TUI Layer                      │
-│        Phelix.Tui (Spectre.Console)             │
-│   streaming output · status line · spinner      │
-└────────────────────┬────────────────────────────┘
-                     │
-┌────────────────────▼────────────────────────────┐
-│               Orchestration Loop                │
-│              Phelix.Core.Agent                  │
-│  turn loop · tool dispatch · sensor invocation  │
-└──────┬──────────────────────────────┬───────────┘
-       │                              │
-┌──────▼──────┐              ┌────────▼───────────┐
-│   Model     │              │   Tool Registry    │
-│   Adapter   │              │  Phelix.Core.Tools │
-│ (IChatClient)│             │  built-in + custom │
-└─────────────┘              └────────────────────┘
-       │
-┌──────▼──────────────────────────────────────────┐
-│            Sensor Pipeline                      │
-│         Phelix.Core.Sensors                     │
-│     Roslyn · build · test · custom              │
-└─────────────────────────────────────────────────┘
-```
-
-The model acts, sensors fire, feedback enters the next turn. That cycle is what makes Phelix a harness.
+Project guidance lives in `AGENTS.md` at the repo root — committed alongside the code, not stored in a cloud account.
 
 ---
 
 ## Status
 
-Phelix is in active development. Current phase: **Phase 2 — Tools**.
-
 | Phase | Goal | Status |
 |---|---|---|
-| 1 — Skeleton | `phelix "hello"` runs, streams output | done |
-| 2 — Tools | Agent reads files, calls tools, dispatches results | in progress |
+| 1 — Skeleton | streaming output, turn loop | done |
+| 2 — Tools | file read/write, bash, search, session log | in progress |
 | 3 — Sensors | Roslyn and build feedback close the loop | upcoming |
-| 4 — Context | `PHELIX.md` and skills work end-to-end | upcoming |
-| 5 — Release | `dotnet tool install -g phelix` | upcoming |
+| 4 — Release | `dotnet tool install -g phelix` | upcoming |
 
 ---
 
-## Tech Stack
+## Tech stack
 
-| Layer | Choice |
+| | |
 |---|---|
-| Language | C# 14 |
-| Runtime | .NET 10 |
+| Language | C# 14 / .NET 10 |
 | Model abstraction | `Microsoft.Extensions.AI` (`IChatClient`) |
 | TUI | Spectre.Console |
 | CLI | System.CommandLine |
-| Semantic analysis | Roslyn (`Microsoft.CodeAnalysis`) |
-| Distribution | `dotnet tool install -g phelix` |
 
 ---
 
