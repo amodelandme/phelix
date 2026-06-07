@@ -8,10 +8,10 @@ Architecture document: `docs/ARCHITECTURE.md`. Read it before anything else.
 ## Agent-first conventions
 
 - **No `var`.** Always write explicit types. Agents cannot infer — they read what is written.
-- **XML documentation on all public members.** Include `<param>`, `<returns>`, and a `<remarks>` block explaining *why* a design decision was made, not just what the code does.
+- **XML documentation on all public/internal members.** Include `<param>`, `<returns>`, and a `<remarks>` block explaining *why* a design decision was made, not just what the code does.
 - **Business-rule test names.** Test method names encode the domain rule being verified, not the method being called. Example: `RunTurnAsync_WhenHistoryIsEmpty_SendsSingleUserMessage`.
-- **Strong types over primitives.** Prefer named types (`ModelId`, `SessionId`) over raw `string` where the domain warrants it. Deferred until config layer.
-- **Explicit `Result<T, TError>` return types.** Named failure cases over exceptions for recoverable errors. Deferred until tool dispatch layer.
+- **Strong types over primitives.** Prefer named types (`ModelId`, `SessionId`) over raw `string` where the domain warrants it.
+- **Explicit `Result<T, TError>` return types.** Named failure cases over exceptions for recoverable errors.
 
 ## Coding standards
 

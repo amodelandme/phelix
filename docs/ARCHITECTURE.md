@@ -3,9 +3,9 @@
 > **"There are many agent harnesses, but this one is yours."**
 > A minimal CLI coding harness for .NET developers.
 
-**Version:** 0.1 (pre-implementation)
+**Version:** 0.1
 **Date:** May 2026
-**Status:** Design — not yet implemented
+**Status:** Phases 1–2 complete; Phase 3 in progress
 
 ---
 
@@ -225,74 +225,60 @@ Each turn appends a JSON record. The file is append-only and human-readable.
 phelix/
 ├── src/
 │   ├── Phelix.Cli/                  # Entry point — dotnet global tool
-│   │   ├── Program.cs               # System.CommandLine root command
-│   │   ├── Commands/
-│   │   │   ├── RunCommand.cs        # phelix "do the thing"
-│   │   │   ├── InitCommand.cs       # phelix init
-│   │   │   └── SkillCommand.cs      # phelix skill list|add|remove
+│   │   ├── Program.cs               # REPL loop — reads input, calls AgentLoop, logs turn
+│   │   ├── PhelixHost.cs            # Wires IChatClient, AgentOptions, ToolRegistry
 │   │   └── Phelix.Cli.csproj
 │   │
 │   ├── Phelix.Core/                 # All logic — no UI dependencies
 │   │   ├── Agent/
 │   │   │   ├── AgentLoop.cs         # The orchestration loop
-│   │   │   ├── Turn.cs              # One turn: prompt → tools → sensors → response
-│   │   │   └── AgentOptions.cs
-│   │   ├── Context/
-│   │   │   ├── ContextManager.cs    # Builds the context window each turn
-│   │   │   ├── PhelixMdLoader.cs    # Finds and merges PHELIX.md files
-│   │   │   ├── SkillLoader.cs       # Loads skills on demand
-│   │   │   └── Compactor.cs        # Summarises old turns near context limit
-│   │   ├── Tools/
-│   │   │   ├── ToolRegistry.cs      # Discovers and registers tools
-│   │   │   ├── ToolResult.cs        # Uniform result type
-│   │   │   ├── Builtin/
-│   │   │   │   ├── ReadFileTool.cs
-│   │   │   │   ├── WriteFileTool.cs
-│   │   │   │   ├── RunCommandTool.cs
-│   │   │   │   ├── DotnetBuildTool.cs
-│   │   │   │   ├── DotnetTestTool.cs
-│   │   │   │   ├── RoslynDiagnosticsTool.cs
-│   │   │   │   ├── ListFilesTool.cs
-│   │   │   │   └── SearchCodeTool.cs
-│   │   │   └── ITool.cs             # Tool contract
-│   │   ├── Sensors/
-│   │   │   ├── SensorPipeline.cs    # Runs sensors, collects signals
-│   │   │   ├── ISensor.cs
-│   │   │   ├── RoslynSensor.cs      # Compiler diagnostics
-│   │   │   ├── BuildSensor.cs       # dotnet build result
-│   │   │   └── TestSensor.cs        # dotnet test result
+│   │   │   ├── Turn.cs              # Runtime artifact for one turn
+│   │   │   ├── TurnExitReason.cs    # Why the loop stopped
+│   │   │   └── AgentOptions.cs      # Per-session model + system prompt config
+│   │   ├── Config/
+│   │   │   ├── PhelixConfig.cs      # Single config object threaded through the harness
+│   │   │   ├── ModelConfig.cs       # Per-model provider + modelId + max_turns
+│   │   │   ├── ProviderConfig.cs    # base_url + api_key_env per provider
+│   │   │   ├── IConfigProvider.cs   # Seam for loading config
+│   │   │   ├── FileConfigProvider.cs # Reads ~/.phelix/config.yaml
+│   │   │   ├── ConfigLoader.cs      # Resolves path, validates, warns on missing keys
+│   │   │   └── ConfigException.cs   # Thrown on invalid config
 │   │   ├── Session/
-│   │   │   ├── Session.cs
-│   │   │   ├── SessionStore.cs      # Append-only JSON log
-│   │   │   └── TurnRecord.cs
-│   │   ├── Models/
-│   │   │   └── ModelAdapterFactory.cs  # Builds IChatClient from config
+│   │   │   ├── SessionLogger.cs     # Appends TurnRecords to ~/.phelix/sessions/*.jsonl
+│   │   │   ├── TurnRecord.cs        # Durable log schema for a completed turn
+│   │   │   ├── ToolCallRecord.cs    # Per-invocation log entry
+│   │   │   ├── ToolCallStatus.cs    # Succeeded / Failed dispatch outcome
+│   │   │   ├── UsageSummary.cs      # Aggregate token counts for a turn
+│   │   │   ├── TurnEvent.cs         # Extension point for Phase 3 sensor results
+│   │   │   └── SensorStatus.cs      # Passed / Failed / Skipped sensor outcome
+│   │   ├── Tools/
+│   │   │   ├── ITool.cs             # Tool contract
+│   │   │   ├── ToolRegistry.cs      # Registers and dispatches tools by name
+│   │   │   ├── ReadFileTool.cs
+│   │   │   ├── WriteFileTool.cs
+│   │   │   ├── BashTool.cs
+│   │   │   ├── ListFilesTool.cs
+│   │   │   └── SearchCodeTool.cs
+│   │   ├── Telemetry/
+│   │   │   └── PhelixTelemetry.cs   # ActivitySource + span/tag name constants
 │   │   └── Phelix.Core.csproj
 │   │
 │   └── Phelix.Tui/                  # Spectre.Console rendering
-│       ├── AgentRenderer.cs         # Streams model output to terminal
-│       ├── StatusBar.cs             # Model name · tokens · current tool
-│       ├── Spinner.cs               # Tool-call progress indicator
+│       ├── TerminalRenderer.cs      # Streams model output to terminal
 │       └── Phelix.Tui.csproj
 │
 ├── tests/
-│   ├── Phelix.Core.Tests/
-│   │   ├── Agent/
-│   │   ├── Context/
-│   │   ├── Sensors/
-│   │   └── Tools/
-│   └── Phelix.Integration.Tests/
+│   └── Phelix.Core.Tests/           # Unit tests — no real model, filesystem, or terminal
+│
+├── skills/
+│   └── gitWorkflow/
+│       └── SKILL.md                 # Branching, commit format, PR template, merge rules
 │
 ├── docs/
 │   ├── ARCHITECTURE.md              # this file
-│   ├── skills/                      # bundled skill library
-│   │   ├── dotnet-webapi.md
-│   │   ├── efcore.md
-│   │   └── opentelemetry.md
-│   └── AGENTS.md                   # instructions for AI working on Phelix itself
+│   └── decisions/                   # per-feature spec + implementation notes
 │
-├── PHELIX.md                        # Phelix's own harness config (meta)
-├── phelix.sln
+├── AGENTS.md                        # Instructions for AI working on Phelix itself
 └── README.md
 ```
 
@@ -352,32 +338,37 @@ This is the heart of Phelix. Everything else exists to serve this loop.
 
 ## 6. Configuration
 
-Phelix reads configuration from three sources, in priority order
-(later overrides earlier):
+Phelix reads configuration from `~/.phelix/config.yaml`. When the file is
+absent, `PhelixConfig.Default` is used without error.
 
-1. `~/.phelix/config.json` — user-level defaults (model, API key source)
-2. `PHELIX.md` files in the project tree — project-level instructions
-3. CLI flags — per-invocation overrides (`--model`, `--no-sensors`)
+The `PHELIX_CONFIG` environment variable overrides the path.
 
-### 6.1 config.json
+### 6.1 config.yaml
 
-```json
-{
-  "defaultModel": "claude-sonnet-4-6",
-  "providers": {
-    "anthropic": { "apiKeyEnvVar": "ANTHROPIC_API_KEY" },
-    "openai":    { "apiKeyEnvVar": "OPENAI_API_KEY" }
-  },
-  "session": {
-    "storePath": "~/.phelix/sessions"
-  },
-  "sensors": {
-    "enabled": true,
-    "runBuildOnWrite": true,
-    "runTestsOnWrite": false
-  }
-}
+```yaml
+active_model: sonnet
+
+system_prompt: "You are a helpful coding assistant."
+
+providers:
+  openrouter:
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+
+models:
+  sonnet:
+    provider: openrouter
+    model_id: anthropic/claude-sonnet-4-6
+    max_turns: 10
+  fast:
+    provider: openrouter
+    model_id: qwen/qwen3.5-flash-02-23
+    max_turns: 5
 ```
+
+`active_model` must match a key in `models`. Each model's `provider` must
+match a key in `providers`. API keys are never stored in config — only the
+environment variable name that holds the key.
 
 ---
 
