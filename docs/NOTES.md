@@ -10,6 +10,7 @@ Scratch pad for in-progress thinking. Organized work lives in ROADMAP.md and doc
 - Custom exception handling — descriptive messages designed for agent consumption, not just humans
 - Custom validation — same goal: errors the agent can act on without disambiguation
 - Harness purpose framing: extract as much deterministic, verifiable behavior as possible and encode it as code-based rules. When all deterministic actions are coded, tune the system prompt.
+- Session logs - option to rename or give user option to give name at the start of a session. easier to find in session folder. difficult with just date-time.
 
 ---
 
