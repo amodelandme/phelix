@@ -115,4 +115,54 @@ public class ListFilesToolTests : IDisposable
         Assert.True(string.Compare(lines[0], lines[1], StringComparison.Ordinal) < 0);
         Assert.True(string.Compare(lines[1], lines[2], StringComparison.Ordinal) < 0);
     }
+
+    [Fact]
+    public async Task ListFilesTool_DefaultExclusions_ExcludesGitBinObj()
+    {
+        CreateFile(Path.Combine(".git", "config"));
+        CreateFile(Path.Combine(".git", "HEAD"));
+        CreateFile(Path.Combine("bin", "Debug", "app.dll"));
+        CreateFile(Path.Combine("obj", "project.assets.json"));
+        CreateFile(Path.Combine("src", "Main.cs"));
+        ListFilesTool tool = Tool();
+
+        string result = await tool.ExecuteAsync(
+            new Dictionary<string, object?> { ["pattern"] = "*" },
+            CancellationToken.None);
+
+        Assert.DoesNotContain(".git", result);
+        Assert.DoesNotContain("bin", result);
+        Assert.DoesNotContain("obj", result);
+        Assert.Contains("Main.cs", result);
+    }
+
+    [Fact]
+    public async Task ListFilesTool_CustomExcludedDirectories_HonorsOverride()
+    {
+        CreateFile(Path.Combine("vendor", "lib.js"));
+        CreateFile(Path.Combine("src", "Main.cs"));
+        ListFilesTool tool = new(_root, new HashSet<string> { "vendor" });
+
+        string result = await tool.ExecuteAsync(
+            new Dictionary<string, object?> { ["pattern"] = "*" },
+            CancellationToken.None);
+
+        Assert.DoesNotContain("vendor", result);
+        Assert.Contains("Main.cs", result);
+    }
+
+    [Fact]
+    public async Task ListFilesTool_EmptyExcludedDirectories_IncludesAll()
+    {
+        CreateFile(Path.Combine(".git", "config"));
+        CreateFile(Path.Combine("src", "Main.cs"));
+        ListFilesTool tool = new(_root, new HashSet<string>());
+
+        string result = await tool.ExecuteAsync(
+            new Dictionary<string, object?> { ["pattern"] = "*" },
+            CancellationToken.None);
+
+        Assert.Contains(".git", result);
+        Assert.Contains("Main.cs", result);
+    }
 }

@@ -8,26 +8,41 @@ namespace Phelix.Core.Tools;
 /// <remarks>
 /// Supports <c>**</c> for recursive matching via <see cref="SearchOption.AllDirectories"/>.
 /// Results are sorted lexicographically and capped at <c>max_results</c>.
+/// Directories named in <see cref="ExcludedDirectories"/> are never included in results.
 /// </remarks>
 public class ListFilesTool : ITool
 {
     const int DefaultMaxResults = 200;
 
+    static readonly IReadOnlySet<string> DefaultExcludedDirectories =
+        new HashSet<string>(StringComparer.Ordinal) { ".git", "bin", "obj" };
+
     /// <summary>The directory all glob searches are rooted at.</summary>
     public string RootDirectory { get; }
+
+    /// <summary>Directory segment names excluded from all results.</summary>
+    public IReadOnlySet<string> ExcludedDirectories { get; }
 
     /// <inheritdoc/>
     public string Name => "list_files";
 
     /// <inheritdoc/>
-    public string Description => "Lists files matching a glob pattern relative to the root directory. Use ** for recursive matching (e.g. src/**/*.cs). Returns one path per line, sorted, and capped at max_results.";
+    public string Description => "Lists files matching a glob pattern relative to the root directory. Use ** for recursive matching (e.g. src/**/*.cs). Prefer scoped patterns over bare * to avoid broad results. .git, bin, and obj directories are always excluded. Returns one path per line, sorted, and capped at max_results.";
 
     /// <param name="rootDirectory">
     /// Absolute path to root all searches against.
     /// Defaults to <see cref="Directory.GetCurrentDirectory"/> when <c>null</c>.
     /// </param>
-    public ListFilesTool(string? rootDirectory = null) =>
+    /// <param name="excludedDirectories">
+    /// Directory segment names to exclude from results.
+    /// Defaults to <c>{ ".git", "bin", "obj" }</c> when <c>null</c>.
+    /// Pass an empty set to disable all exclusions.
+    /// </param>
+    public ListFilesTool(string? rootDirectory = null, IReadOnlySet<string>? excludedDirectories = null)
+    {
         RootDirectory = Path.GetFullPath(rootDirectory ?? Directory.GetCurrentDirectory());
+        ExcludedDirectories = excludedDirectories ?? DefaultExcludedDirectories;
+    }
 
     /// <inheritdoc/>
     /// <remarks>
@@ -53,7 +68,7 @@ public class ListFilesTool : ITool
         string[] matches;
         try
         {
-            matches = ResolveGlob(RootDirectory, pattern);
+            matches = ResolveGlob(RootDirectory, pattern, ExcludedDirectories);
         }
         catch (ArgumentException ex)
         {
@@ -102,7 +117,7 @@ public class ListFilesTool : ITool
     // Directory.GetFiles does not support ** globs. Extract the file name pattern from
     // the last segment and search AllDirectories, then filter by path prefix for
     // patterns like "src/**/*.cs".
-    static string[] ResolveGlob(string root, string glob)
+    static string[] ResolveGlob(string root, string glob, IReadOnlySet<string> excludedDirectories)
     {
         string normalizedGlob = glob.Replace('\\', '/');
         int lastSlash = normalizedGlob.LastIndexOf('/');
@@ -117,6 +132,28 @@ public class ListFilesTool : ITool
         if (!Directory.Exists(searchRoot))
             return [];
 
-        return Directory.GetFiles(searchRoot, filePattern, SearchOption.AllDirectories);
+        string[] all = Directory.GetFiles(searchRoot, filePattern, SearchOption.AllDirectories);
+
+        if (excludedDirectories.Count == 0)
+            return all;
+
+        return Array.FindAll(all, path => !HasExcludedSegment(path, excludedDirectories));
+    }
+
+    static bool HasExcludedSegment(string path, IReadOnlySet<string> excludedDirectories)
+    {
+        ReadOnlySpan<char> span = path.AsSpan();
+        int start = 0;
+        for (int i = 0; i <= span.Length; i++)
+        {
+            if (i == span.Length || span[i] == Path.DirectorySeparatorChar || span[i] == Path.AltDirectorySeparatorChar)
+            {
+                ReadOnlySpan<char> segment = span[start..i];
+                if (segment.Length > 0 && excludedDirectories.Contains(segment.ToString()))
+                    return true;
+                start = i + 1;
+            }
+        }
+        return false;
     }
 }

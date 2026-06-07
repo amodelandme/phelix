@@ -17,22 +17,21 @@ YAML config at `~/.phelix/config.yaml`; named provider and model profiles; `ICon
 ## Phase Queue
 *Well-scoped items, roughly in priority order. Start a spec in `docs/decisions/` before touching code.*
 
-### Session schema redesign
-`SessionEntry` captures only user prompt and assistant text. Tool calls (name, arguments, result) are silently dropped.
-- Design the schema with both RAG and observability in mind
-- Do not change the on-disk format (JSONL stays); redesign the schema
-- Prerequisite for agent diagnostics, RAG, and any persistence work
+### ~~Session schema redesign~~ ✓ done
+`SessionEntry` replaced by `TurnRecord`. Tool calls, token usage, exit reason, turn/session IDs, and start/end timestamps are now fully persisted. `bool` fields replaced with typed enums (`ToolCallStatus`, `SensorStatus`). `TurnEvent` hierarchy reserved for Phase 3 sensor results. Spec and implementation in `docs/decisions/session-schema-redesign/`.
 
-### Context compaction
-`conversationHistory` is an unbounded list — every turn sends the full history to the model.
-- Detect when history approaches a threshold (half the context window)
-- Summarize older turns into a single condensed message; discard the raw turns
-- Highest-priority memory improvement
+### ~~Session log: `list_files` glob scopes into `.git`~~ ✓ done
+`ExcludedDirectories` property on `ListFilesTool` defaults to `{ ".git", "bin", "obj" }`. Segment-exact filtering applied after glob resolution. Description updated to guide toward scoped patterns. Spec and implementation in `docs/decisions/list-files-glob-scoping/`.
 
 ### Tool output truncation
-Tool results are appended as-is. A `bash` call that dumps 20,000 lines consumes the context window.
+Tool results are appended as-is. A `bash` call that dumps 20,000 lines consumes the context window. Every tool result — including `list_files` blobs — is sent verbatim on every subsequent turn.
 - Add `TruncateToolOutput(string result, int maxChars)` helper in `AgentLoop`
 - Applied before appending any tool result to the message list
+
+### Context compaction
+`conversationHistory` is an unbounded list — every turn sends the full history to the model. Accumulated tool results compound the cost significantly.
+- Detect when history approaches a threshold (half the context window)
+- Summarize older turns into a single condensed message; discard the raw turns
 
 ### Retry / circuit breaker
 A 429 or transient network error kills the session.
