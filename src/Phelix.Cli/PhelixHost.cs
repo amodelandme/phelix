@@ -5,6 +5,7 @@ using OpenTelemetry;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Phelix.Core.Agent;
+using Phelix.Core.Config;
 using Phelix.Core.Telemetry;
 using Phelix.Core.Tools;
 
@@ -33,6 +34,10 @@ internal static class PhelixHost
     /// </returns>
     internal static (AgentLoop AgentLoop, TracerProvider? TracerProvider) Build()
     {
+        PhelixConfig config = ConfigLoader.Load();
+        ModelConfig activeModel = config.Models[config.ActiveModel];
+        ProviderConfig provider = config.Providers[activeModel.Provider];
+
         string? otlpEndpoint = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT");
 
         TracerProvider? tracerProvider = otlpEndpoint is not null
@@ -43,22 +48,26 @@ internal static class PhelixHost
                 .Build()
             : null;
 
+        string apiKey = Environment.GetEnvironmentVariable(provider.ApiKeyEnv)
+            ?? throw new ConfigException($"Environment variable '{provider.ApiKeyEnv}' is not set.");
+
         OpenAIClient openAiClient = new(
-            new ApiKeyCredential(Environment.GetEnvironmentVariable("OPENROUTER_API_KEY")!),
-            new OpenAIClientOptions { Endpoint = new Uri("https://openrouter.ai/api/v1") }
+            new ApiKeyCredential(apiKey),
+            new OpenAIClientOptions { Endpoint = new Uri(provider.BaseUrl) }
         );
 
         // Potential prompt injection vector if ModelId is user-controlled — in production,
         // validate against an allowlist or use separate credentials per model.
         IChatClient chatClient = new ChatClientBuilder(
-                openAiClient.GetChatClient("qwen/qwen3.5-flash-02-23").AsIChatClient())
+                openAiClient.GetChatClient(activeModel.ModelId).AsIChatClient())
             .UseOpenTelemetry(loggerFactory: null, sourceName: PhelixTelemetry.SourceName)
             .Build();
 
         AgentOptions agentOptions = new()
         {
-            ModelId = "qwen/qwen3.5-flash-02-23",
-            SystemPrompt = "You are a helpful coding assistant."
+            ModelId = activeModel.ModelId,
+            SystemPrompt = config.SystemPrompt,
+            MaxTurns = activeModel.MaxTurns
         };
 
         ToolRegistry toolRegistry = new();
