@@ -240,7 +240,12 @@ phelix/
 │   │   │   ├── AgentLoop.cs         # The orchestration loop
 │   │   │   ├── Turn.cs              # Runtime artifact for one turn
 │   │   │   ├── TurnExitReason.cs    # Why the loop stopped
-│   │   │   └── AgentOptions.cs      # Per-session model + system prompt config
+│   │   │   ├── AgentOptions.cs      # Per-session model + system prompt + approval gate config
+│   │   │   ├── ApprovalTier.cs      # Auto / Prompt / Confirm — declared on each ITool
+│   │   │   ├── SessionMode.cs       # Default / AcceptsEdits / AllowAll — set at startup
+│   │   │   ├── IApprovalGate.cs     # Gate contract consulted before every tool dispatch
+│   │   │   ├── AutoApproveGate.cs   # IApprovalGate: always approves (AllowAll + tests)
+│   │   │   └── InteractiveApprovalGate.cs # IApprovalGate: prompts terminal; injectable I/O
 │   │   ├── Config/
 │   │   │   ├── PhelixConfig.cs      # Single config object threaded through the harness
 │   │   │   ├── ModelConfig.cs       # Per-model provider + modelId + max_turns
@@ -253,7 +258,7 @@ phelix/
 │   │   │   ├── SessionLogger.cs     # Appends TurnRecords to ~/.phelix/sessions/*.jsonl
 │   │   │   ├── TurnRecord.cs        # Durable log schema for a completed turn
 │   │   │   ├── ToolCallRecord.cs    # Per-invocation log entry
-│   │   │   ├── ToolCallStatus.cs    # Succeeded / Failed dispatch outcome
+│   │   │   ├── ToolCallStatus.cs    # Succeeded / Failed / Denied dispatch outcome
 │   │   │   ├── UsageSummary.cs      # Aggregate token counts for a turn
 │   │   │   ├── TurnEvent.cs         # Extension point for Phase 3 sensor results
 │   │   │   ├── SensorStatus.cs      # Passed / Failed / Skipped sensor outcome
@@ -272,6 +277,8 @@ phelix/
 │   │   │   ├── ListFilesTool.cs
 │   │   │   ├── SearchCodeTool.cs
 │   │   │   └── SearchSessionTool.cs # FTS5 query over stored tool outputs (post-compaction recall)
+│   │   ├── Context/
+│   │   │   └── AgentsMdLoader.cs    # Loads AGENTS.md from CWD and composes it with base system prompt
 │   │   ├── Telemetry/
 │   │   │   └── PhelixTelemetry.cs   # ActivitySource + span/tag name constants
 │   │   └── Phelix.Core.csproj

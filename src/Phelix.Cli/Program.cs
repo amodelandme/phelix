@@ -5,11 +5,15 @@ using Phelix.Core.Agent;
 using Phelix.Core.Session;
 using Phelix.Tui;
 
+SessionMode sessionMode = args.Contains("--allow-all")    ? SessionMode.AllowAll
+                        : args.Contains("--accepts-edits") ? SessionMode.AcceptsEdits
+                        : SessionMode.Default;
+
 (AgentLoop agentLoop,
  ISessionStore sessionStore,
  ICompactionPolicy compactionPolicy,
  ISessionSummarizer summarizer,
- TracerProvider? tracerProvider) = PhelixHost.Build();
+ TracerProvider? tracerProvider) = PhelixHost.Build(sessionMode);
 
 using TracerProvider? _ = tracerProvider;
 using IDisposable sessionStoreDisposable = (IDisposable)sessionStore;

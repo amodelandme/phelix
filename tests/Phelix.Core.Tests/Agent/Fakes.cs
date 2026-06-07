@@ -1,4 +1,5 @@
 using Microsoft.Extensions.AI;
+using Phelix.Core.Agent;
 using Phelix.Core.Tools;
 
 namespace Phelix.Core.Tests.Agent;
@@ -90,6 +91,7 @@ sealed class FakeTool : ITool
 
     public string Name { get; }
     public string Description => "Fake tool for testing.";
+    public ApprovalTier ApprovalTier => ApprovalTier.Auto;
 
     public Task<string> ExecuteAsync(
         IReadOnlyDictionary<string, object?> parameters,

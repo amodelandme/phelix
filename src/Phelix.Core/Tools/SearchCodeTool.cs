@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.AI;
+using Phelix.Core.Agent;
 
 namespace Phelix.Core.Tools;
 
@@ -23,6 +24,9 @@ public class SearchCodeTool : ITool
 
     /// <inheritdoc/>
     public string Description => "Searches file contents for a literal string or .NET regex. Returns matching lines in the format 'path:line_number: content'. Use file_glob to restrict which files are searched (e.g. **/*.cs).";
+
+    /// <inheritdoc/>
+    public ApprovalTier ApprovalTier => ApprovalTier.Auto;
 
     /// <param name="rootDirectory">
     /// Absolute path to root all searches against.

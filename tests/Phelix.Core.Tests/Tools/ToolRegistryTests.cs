@@ -1,4 +1,5 @@
 using Microsoft.Extensions.AI;
+using Phelix.Core.Agent;
 using Phelix.Core.Tools;
 
 namespace Phelix.Core.Tests.Tools;
@@ -9,6 +10,7 @@ public class ToolRegistryTests
     {
         public string Name => name;
         public string Description => "stub";
+        public ApprovalTier ApprovalTier => ApprovalTier.Auto;
         public Task<string> ExecuteAsync(IReadOnlyDictionary<string, object?> parameters, CancellationToken cancellationToken)
             => Task.FromResult("ok");
 

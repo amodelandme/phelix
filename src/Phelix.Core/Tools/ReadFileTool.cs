@@ -1,4 +1,5 @@
 using Microsoft.Extensions.AI;
+using Phelix.Core.Agent;
 
 namespace Phelix.Core.Tools;
 
@@ -19,6 +20,9 @@ public class ReadFileTool : ITool
 
     /// <inheritdoc/>
     public string Description => "Reads the contents of a file at the given path. The path must be within the allowed root directory.";
+
+    /// <inheritdoc/>
+    public ApprovalTier ApprovalTier => ApprovalTier.Auto;
 
     /// <param name="rootDirectory">
     /// Absolute path of the directory that bounds all reads.

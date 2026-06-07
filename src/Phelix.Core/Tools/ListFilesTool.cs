@@ -1,4 +1,5 @@
 using Microsoft.Extensions.AI;
+using Phelix.Core.Agent;
 
 namespace Phelix.Core.Tools;
 
@@ -28,6 +29,9 @@ public class ListFilesTool : ITool
 
     /// <inheritdoc/>
     public string Description => "Lists files matching a glob pattern relative to the root directory. Use ** for recursive matching (e.g. src/**/*.cs). Prefer scoped patterns over bare * to avoid broad results. .git, bin, and obj directories are always excluded. Returns one path per line, sorted, and capped at max_results.";
+
+    /// <inheritdoc/>
+    public ApprovalTier ApprovalTier => ApprovalTier.Auto;
 
     /// <param name="rootDirectory">
     /// Absolute path to root all searches against.

@@ -38,12 +38,8 @@ YAML config at `~/.phelix/config.yaml`; named provider and model profiles; `ICon
 ### ~~AGENTS.md per-repo loading~~ ✓ done — PR #21
 `AgentsMdLoader` reads `AGENTS.md` from the current working directory on startup and composes it with the base system prompt using XML-tagged sections. File absence is silent; read failures warn to stderr. Spec and implementation in `docs/decisions/agents-md-loading/`.
 
-### Tiered approval friction
-All tool calls currently auto-execute.
-- Auto-approve low-risk reads (`ReadFileTool`, `ListFilesTool`)
-- Prompt on writes (`WriteFileTool`)
-- Require explicit confirmation for destructive or network-touching `BashTool` calls
-- Configurable per user
+### ~~Tiered approval friction~~ ✓ done — PR #22
+`ApprovalTier` on `ITool` (`Auto` / `Prompt` / `Confirm`) declares per-tool approval requirements. `IApprovalGate` is consulted by `AgentLoop` before every dispatch. `SessionMode` (`Default` / `AcceptsEdits` / `AllowAll`) controls gate behaviour; `--accepts-edits` and `--allow-all` flags set the mode at startup. Denied calls are recorded as `ToolCallStatus.Denied`. Spec and implementation in `docs/decisions/tiered-approval-friction/`.
 
 ---
 

@@ -139,11 +139,28 @@ public class AgentLoop(IChatClient chatClient, AgentOptions options, ToolRegistr
                                 ? new Dictionary<string, object?>(call.Arguments, StringComparer.Ordinal)
                                 : [];
 
-                            result = TruncateToolOutput(
-                                await tool!.ExecuteAsync(args, cancellationToken),
-                                MaxToolOutputChars);
-                            status = ToolCallStatus.Succeeded;
-                            toolCall?.SetTag(PhelixTelemetry.Tags.Tool.Success, true);
+                            string callSummary = BuildCallSummary(call.Name, args);
+                            bool approved = await options.ApprovalGate.RequestApprovalAsync(
+                                call.Name,
+                                tool!.ApprovalTier,
+                                callSummary,
+                                cancellationToken);
+
+                            if (!approved)
+                            {
+                                result = $"Tool call '{call.Name}' was denied by the user.";
+                                status = ToolCallStatus.Denied;
+                                toolCall?.SetTag(PhelixTelemetry.Tags.Tool.Success, false);
+                                toolCall?.SetTag(PhelixTelemetry.Tags.Tool.Error, result);
+                            }
+                            else
+                            {
+                                result = TruncateToolOutput(
+                                    await tool!.ExecuteAsync(args, cancellationToken),
+                                    MaxToolOutputChars);
+                                status = ToolCallStatus.Succeeded;
+                                toolCall?.SetTag(PhelixTelemetry.Tags.Tool.Success, true);
+                            }
                         }
                         else
                         {
@@ -206,6 +223,35 @@ public class AgentLoop(IChatClient chatClient, AgentOptions options, ToolRegistr
         string tail = result[^tailLength..];
 
         return $"{head}\n... [{truncatedCharCount} chars truncated] ...\n{tail}";
+    }
+
+    /// <summary>
+    /// Produces a short human-readable description of a tool call for use in approval prompts.
+    /// </summary>
+    /// <remarks>
+    /// Extracts the most meaningful single argument from <paramref name="args"/> to give the
+    /// user a concrete sense of what the call will do. For file tools this is the path; for
+    /// bash it is the command; for everything else it is the first argument value available.
+    /// Falls back to the tool name alone when no arguments are present.
+    /// </remarks>
+    static string BuildCallSummary(string toolName, IReadOnlyDictionary<string, object?> args)
+    {
+        if (args.TryGetValue("path", out object? path) && path is not null)
+            return path.ToString()!;
+
+        if (args.TryGetValue("command", out object? command) && command is not null)
+            return command.ToString()!;
+
+        if (args.TryGetValue("query", out object? query) && query is not null)
+            return query.ToString()!;
+
+        foreach ((string _, object? value) in args)
+        {
+            if (value is not null)
+                return value.ToString()!;
+        }
+
+        return toolName;
     }
 
     /// <summary>

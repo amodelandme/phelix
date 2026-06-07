@@ -1,4 +1,5 @@
 using Microsoft.Extensions.AI;
+using Phelix.Core.Agent;
 using Phelix.Core.Session;
 
 namespace Phelix.Core.Tools;
@@ -26,6 +27,9 @@ public sealed class SearchSessionTool(ISessionStore store) : ITool
         "Use this after a context compaction to recall specific file contents, " +
         "command output, or search results from earlier in the session. " +
         "Returns up to 5 matching tool call records.";
+
+    /// <inheritdoc/>
+    public ApprovalTier ApprovalTier => ApprovalTier.Auto;
 
     /// <inheritdoc/>
     /// <remarks>
