@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.AI;
 using Phelix.Core.Agent;
 using Phelix.Core.Session;
@@ -7,7 +8,11 @@ namespace Phelix.Core.Tests.Session;
 
 public class SessionLoggerTests : IDisposable
 {
-    private static readonly JsonSerializerOptions ReadOptions = new() { PropertyNameCaseInsensitive = true };
+    private static readonly JsonSerializerOptions ReadOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        Converters = { new JsonStringEnumConverter() }
+    };
 
     private readonly string _logFile;
 
@@ -104,6 +109,29 @@ public class SessionLoggerTests : IDisposable
         TurnRecord? record = JsonSerializer.Deserialize<TurnRecord>(line, ReadOptions);
         Assert.NotNull(record);
         Assert.Equal("Hello", record.UserMessage);
+    }
+
+    [Fact]
+    public async Task SessionLogger_EnumFields_SerializeAsStrings()
+    {
+        IReadOnlyList<ToolCallRecord> toolCalls =
+        [
+            new ToolCallRecord(
+                CallId: "call_01",
+                Name: "ReadFileTool",
+                ArgumentsJson: "{}",
+                Result: "ok",
+                Status: ToolCallStatus.Succeeded
+            )
+        ];
+
+        Turn turn = BuildFakeTurn("Hello", "Hi!", "fake-model-v1", toolCalls);
+        await SessionLogger.AppendAsync(BuildRecord(turn, "Hello"), _logFile);
+
+        string line = (await File.ReadAllLinesAsync(_logFile))[0];
+
+        Assert.Contains("\"exitReason\":\"Completed\"", line);
+        Assert.Contains("\"status\":\"Succeeded\"", line);
     }
 
     [Fact]
