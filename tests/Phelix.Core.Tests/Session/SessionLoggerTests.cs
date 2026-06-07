@@ -7,6 +7,8 @@ namespace Phelix.Core.Tests.Session;
 
 public class SessionLoggerTests : IDisposable
 {
+    private static readonly JsonSerializerOptions ReadOptions = new() { PropertyNameCaseInsensitive = true };
+
     private readonly string _logFile;
 
     public SessionLoggerTests()
@@ -20,7 +22,11 @@ public class SessionLoggerTests : IDisposable
             File.Delete(_logFile);
     }
 
-    private static Turn BuildFakeTurn(string userText, string assistantText, string modelId)
+    private static Turn BuildFakeTurn(
+        string userText,
+        string assistantText,
+        string modelId,
+        IReadOnlyList<ToolCallRecord>? toolCalls = null)
     {
         ChatMessage userMessage = new(ChatRole.User, userText);
         ChatMessage assistantMessage = new(ChatRole.Assistant, assistantText);
@@ -33,9 +39,21 @@ public class SessionLoggerTests : IDisposable
         return new Turn(
             Messages: [userMessage, assistantMessage],
             Response: response,
-            Timestamp: DateTimeOffset.UtcNow
+            Timestamp: DateTimeOffset.UtcNow,
+            Usage: new UsageSummary(100, 50),
+            ToolCalls: toolCalls ?? [],
+            ExitReason: TurnExitReason.Completed
         );
     }
+
+    private static TurnRecord BuildRecord(Turn turn, string userMessage) =>
+        TurnRecord.FromTurn(
+            turn,
+            sessionId: "test-session",
+            userMessage: userMessage,
+            turnId: Guid.NewGuid().ToString("N"),
+            startedAt: DateTimeOffset.UtcNow.AddSeconds(-2)
+        );
 
     [Fact]
     public async Task SessionLogger_WritesTwoTurns_ProducesValidJsonlFile()
@@ -52,37 +70,66 @@ public class SessionLoggerTests : IDisposable
             modelId: "fake-model-v1"
         );
 
-        await SessionLogger.AppendAsync(turn1, turn1.Messages[0].Text!, _logFile);
-        await SessionLogger.AppendAsync(turn2, turn2.Messages[0].Text!, _logFile);
+        await SessionLogger.AppendAsync(BuildRecord(turn1, turn1.Messages[0].Text ?? string.Empty), _logFile);
+        await SessionLogger.AppendAsync(BuildRecord(turn2, turn2.Messages[0].Text ?? string.Empty), _logFile);
 
         string[] lines = await File.ReadAllLinesAsync(_logFile);
 
         Assert.Equal(2, lines.Length);
 
-        SessionEntry? entry1 = JsonSerializer.Deserialize<SessionEntry>(lines[0], new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-        SessionEntry? entry2 = JsonSerializer.Deserialize<SessionEntry>(lines[1], new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        TurnRecord? record1 = JsonSerializer.Deserialize<TurnRecord>(lines[0], ReadOptions);
+        TurnRecord? record2 = JsonSerializer.Deserialize<TurnRecord>(lines[1], ReadOptions);
 
-        Assert.NotNull(entry1);
-        Assert.Equal("What is a record in C#?", entry1.UserMessage);
-        Assert.Equal("A record is an immutable reference type with value-based equality.", entry1.AssistantMessage);
-        Assert.Equal("fake-model-v1", entry1.ModelId);
+        Assert.NotNull(record1);
+        Assert.Equal("What is a record in C#?", record1.UserMessage);
+        Assert.Equal("A record is an immutable reference type with value-based equality.", record1.FinalAssistantMessage);
+        Assert.Equal("fake-model-v1", record1.ModelId);
+        Assert.Equal(TurnExitReason.Completed, record1.ExitReason);
+        Assert.Equal(100, record1.Usage.InputTokens);
+        Assert.Equal(50, record1.Usage.OutputTokens);
 
-        Assert.NotNull(entry2);
-        Assert.Equal("How does it differ from a class?", entry2.UserMessage);
-        Assert.Equal("Records generate Equals, GetHashCode, and ToString based on their properties. Classes do not.", entry2.AssistantMessage);
+        Assert.NotNull(record2);
+        Assert.Equal("How does it differ from a class?", record2.UserMessage);
+        Assert.Equal("Records generate Equals, GetHashCode, and ToString based on their properties. Classes do not.", record2.FinalAssistantMessage);
     }
 
     [Fact]
     public async Task SessionLogger_EachLine_IsIndependentlyParseable()
     {
         Turn turn = BuildFakeTurn("Hello", "Hi there!", "fake-model-v1");
-        await SessionLogger.AppendAsync(turn, "Hello", _logFile);
+        await SessionLogger.AppendAsync(BuildRecord(turn, "Hello"), _logFile);
 
         string line = (await File.ReadAllLinesAsync(_logFile))[0];
 
-        // Each line must parse standalone — no array wrapper
-        SessionEntry? entry = JsonSerializer.Deserialize<SessionEntry>(line, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-        Assert.NotNull(entry);
-        Assert.Equal("Hello", entry.UserMessage);
+        TurnRecord? record = JsonSerializer.Deserialize<TurnRecord>(line, ReadOptions);
+        Assert.NotNull(record);
+        Assert.Equal("Hello", record.UserMessage);
+    }
+
+    [Fact]
+    public async Task SessionLogger_ToolCalls_ArePersisted()
+    {
+        IReadOnlyList<ToolCallRecord> toolCalls =
+        [
+            new ToolCallRecord(
+                CallId: "call_01",
+                Name: "ReadFileTool",
+                ArgumentsJson: "{\"path\":\"src/Program.cs\"}",
+                Result: "using System;",
+                Status: ToolCallStatus.Succeeded
+            )
+        ];
+
+        Turn turn = BuildFakeTurn("Read the file", "Done.", "fake-model-v1", toolCalls);
+        await SessionLogger.AppendAsync(BuildRecord(turn, "Read the file"), _logFile);
+
+        string line = (await File.ReadAllLinesAsync(_logFile))[0];
+        TurnRecord? record = JsonSerializer.Deserialize<TurnRecord>(line, ReadOptions);
+
+        Assert.NotNull(record);
+        Assert.Single(record.ToolCalls);
+        Assert.Equal("ReadFileTool", record.ToolCalls[0].Name);
+        Assert.Equal("call_01", record.ToolCalls[0].CallId);
+        Assert.Equal(ToolCallStatus.Succeeded, record.ToolCalls[0].Status);
     }
 }

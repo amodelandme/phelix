@@ -20,6 +20,12 @@ YAML config at `~/.phelix/config.yaml`; named provider and model profiles; `ICon
 ### ~~Session schema redesign~~ ✓ done
 `SessionEntry` replaced by `TurnRecord`. Tool calls, token usage, exit reason, turn/session IDs, and start/end timestamps are now fully persisted. `bool` fields replaced with typed enums (`ToolCallStatus`, `SensorStatus`). `TurnEvent` hierarchy reserved for Phase 3 sensor results. Spec and implementation in `docs/decisions/session-schema-redesign/`.
 
+### Session log: enum serialization
+`exitReason`, `toolCallStatus`, and `sensorStatus` serialize as integers (`0`, `1`) instead of their string names (`"Completed"`, `"Succeeded"`). The log is unreadable without the source.
+- Add `[JsonConverter(typeof(JsonStringEnumConverter))]` to `TurnExitReason`, `ToolCallStatus`, and `SensorStatus`
+- Or register the converter globally in `SessionLogger.JsonOptions`
+- Verify the fix with `jq` against a real session file
+
 ### ~~Session log: `list_files` glob scopes into `.git`~~ ✓ done
 `ExcludedDirectories` property on `ListFilesTool` defaults to `{ ".git", "bin", "obj" }`. Segment-exact filtering applied after glob resolution. Description updated to guide toward scoped patterns. Spec and implementation in `docs/decisions/list-files-glob-scoping/`.
 

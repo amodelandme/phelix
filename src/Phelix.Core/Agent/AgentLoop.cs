@@ -1,5 +1,7 @@
 using System.Diagnostics;
+using System.Text.Json;
 using Microsoft.Extensions.AI;
+using Phelix.Core.Session;
 using Phelix.Core.Telemetry;
 using Phelix.Core.Tools;
 
@@ -70,6 +72,7 @@ public class AgentLoop(IChatClient chatClient, AgentOptions options, ToolRegistr
         int toolTurns = 0;
         int totalInputTokens = 0;
         int totalOutputTokens = 0;
+        List<ToolCallRecord> toolCallRecords = [];
 
         try
         {
@@ -103,7 +106,8 @@ public class AgentLoop(IChatClient chatClient, AgentOptions options, ToolRegistr
                     turn?.SetTag(PhelixTelemetry.Tags.Turn.OutputTokens, totalOutputTokens);
 
                     TurnExitReason exitReason = limitReached ? TurnExitReason.TurnLimitReached : TurnExitReason.Completed;
-                    return new Turn(messages, response, DateTimeOffset.UtcNow, exitReason);
+                    UsageSummary usage = new(totalInputTokens, totalOutputTokens);
+                    return new Turn(messages, response, DateTimeOffset.UtcNow, usage, toolCallRecords, exitReason);
                 }
 
                 List<AIContent> toolResults = [];
@@ -114,6 +118,7 @@ public class AgentLoop(IChatClient chatClient, AgentOptions options, ToolRegistr
                         continue;
 
                     string result;
+                    ToolCallStatus status;
 
                     using (Activity? toolCall = PhelixTelemetry.Source.StartActivity(PhelixTelemetry.Spans.ToolCall))
                     {
@@ -126,17 +131,31 @@ public class AgentLoop(IChatClient chatClient, AgentOptions options, ToolRegistr
                                 : [];
 
                             result = await tool!.ExecuteAsync(args, cancellationToken);
+                            status = ToolCallStatus.Succeeded;
                             toolCall?.SetTag(PhelixTelemetry.Tags.Tool.Success, true);
                         }
                         else
                         {
                             result = $"Error: no tool named '{call.Name}' is registered.";
+                            status = ToolCallStatus.Failed;
                             toolCall?.SetTag(PhelixTelemetry.Tags.Tool.Success, false);
                             toolCall?.SetTag(PhelixTelemetry.Tags.Tool.Error, result);
                         }
                     }
 
-                    toolResults.Add(new FunctionResultContent(call.CallId, result));
+                    string argumentsJson = call.Arguments is not null
+                        ? JsonSerializer.Serialize(call.Arguments)
+                        : "{}";
+
+                    toolCallRecords.Add(new ToolCallRecord(
+                        CallId: call.CallId ?? string.Empty,
+                        Name: call.Name,
+                        ArgumentsJson: argumentsJson,
+                        Result: result,
+                        Status: status
+                    ));
+
+                    toolResults.Add(new FunctionResultContent(call.CallId ?? string.Empty, result));
                 }
 
                 messages.Add(new ChatMessage(ChatRole.Tool, toolResults));
