@@ -56,7 +56,7 @@ public class ReadFileTool : ITool
             return $"Error: could not resolve path '{requestedPath}': {ex.Message}";
         }
 
-        if (!absolutePath.StartsWith(RootDirectory, StringComparison.Ordinal))
+        if (!IsWithinRoot(RootDirectory, absolutePath))
             return $"Error: path '{absolutePath}' is outside the allowed root '{RootDirectory}'.";
 
         if (!File.Exists(absolutePath))
@@ -79,4 +79,10 @@ public class ReadFileTool : ITool
                 ExecuteAsync(new Dictionary<string, object?> { ["path"] = path }, ct),
             Name,
             Description);
+
+    internal static bool IsWithinRoot(string root, string candidate)
+    {
+        string relative = Path.GetRelativePath(root, candidate);
+        return !relative.StartsWith("..") && !Path.IsPathRooted(relative);
+    }
 }
