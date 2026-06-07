@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/amodelandme/phelix/actions/workflows/ci.yml/badge.svg)](https://github.com/amodelandme/phelix/actions/workflows/ci.yml) [![Last commit](https://img.shields.io/github/last-commit/amodelandme/phelix)](https://github.com/amodelandme/phelix/commits/main) ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4) ![License](https://img.shields.io/badge/license-MIT-green)
 
-> **Currently building:** context compaction · retry / circuit breaker
+> **Currently building:** Phase 3 sensors — Roslyn diagnostics · build feedback
 
 ---
 
@@ -35,16 +35,20 @@ Provider and model profiles live in `~/.phelix/config.yaml`:
 ```yaml
 providers:
   openrouter:
-    endpoint: https://openrouter.ai/api/v1
-    apiKeyEnvVar: OPENROUTER_API_KEY
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+
+active_model: sonnet
 
 models:
-  default:
+  sonnet:
     provider: openrouter
-    modelId: anthropic/claude-sonnet-4-6
+    model_id: anthropic/claude-sonnet-4-6
+    max_turns: 10
   fast:
     provider: openrouter
-    modelId: qwen/qwen3.5-flash-20260224
+    model_id: qwen/qwen3.5-flash-02-23
+    max_turns: 5
 ```
 
 Project guidance lives in `AGENTS.md` at the repo root — committed alongside the code, not stored in a cloud account.
@@ -72,7 +76,7 @@ The full tool output is never discarded — it is written verbatim to the JSONL 
 | Phase | Goal | Status |
 |---|---|---|
 | 1 — Skeleton | streaming output, turn loop | done |
-| 2 — Tools | file read/write, bash, search, session log | in progress |
+| 2 — Tools | file read/write, bash, search, session log | done |
 | 3 — Sensors | Roslyn and build feedback close the loop | upcoming |
 | 4 — Release | `dotnet tool install -g phelix` | upcoming |
 
