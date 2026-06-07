@@ -3,6 +3,16 @@ using YamlDotNet.Serialization.NamingConventions;
 
 namespace Phelix.Core.Config;
 
+/// <summary>
+/// Production <see cref="IConfigProvider"/> that reads <c>~/.phelix/config.yaml</c>.
+/// </summary>
+/// <remarks>
+/// Deserializes the YAML file into private <c>Raw*</c> intermediary types, then maps them
+/// to the domain records via <see cref="Map"/>. The <c>Raw*</c> nested classes are private
+/// deserialization targets for YamlDotNet — they are not part of the public contract and
+/// must not be used outside this file. All name resolution and required-field validation
+/// happens inside <see cref="Map"/>; partial state is never returned.
+/// </remarks>
 public class FileConfigProvider(string filePath) : IConfigProvider
 {
     static readonly IDeserializer Deserializer = new DeserializerBuilder()
@@ -10,6 +20,14 @@ public class FileConfigProvider(string filePath) : IConfigProvider
         .IgnoreUnmatchedProperties()
         .Build();
 
+    /// <summary>
+    /// Reads and parses the config file at the path supplied to the constructor.
+    /// </summary>
+    /// <returns>A fully mapped <see cref="PhelixConfig"/>.</returns>
+    /// <exception cref="ConfigException">
+    /// Thrown when the file cannot be read, cannot be parsed as YAML, or contains
+    /// missing required fields (detected during <see cref="Map"/>).
+    /// </exception>
     public PhelixConfig Load()
     {
         string yaml;
@@ -37,6 +55,10 @@ public class FileConfigProvider(string filePath) : IConfigProvider
         return Map(raw);
     }
 
+    /// <summary>
+    /// Maps raw deserialized YAML types to domain config records, throwing
+    /// <see cref="ConfigException"/> for any missing required field.
+    /// </summary>
     static PhelixConfig Map(RawConfig raw)
     {
         Dictionary<string, ProviderConfig> providers = raw.Providers

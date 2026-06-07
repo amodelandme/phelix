@@ -17,6 +17,11 @@ public static class SessionLogger
         ".phelix", "sessions"
     );
 
+    /// <summary>
+    /// Process-lifetime UUID that identifies this Phelix run. One value per process;
+    /// shared across all turns in the session. Used as the file name component and as
+    /// the <c>sessionId</c> field in every <see cref="TurnRecord"/> written this run.
+    /// </summary>
     public static readonly string SessionId = Guid.NewGuid().ToString("N");
 
     static readonly JsonSerializerOptions JsonOptions = new()
