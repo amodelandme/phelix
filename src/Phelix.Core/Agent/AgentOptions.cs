@@ -11,6 +11,7 @@ namespace Phelix.Core.Agent;
 public record AgentOptions
 {
     const int MaxTurnsDefault = 5;
+    const int CompactionThresholdTokensDefault = 40_000;
 
     /// <summary>
     /// The model identifier forwarded to the <see cref="Microsoft.Extensions.AI.IChatClient"/>.
@@ -29,4 +30,11 @@ public record AgentOptions
     /// Guards against runaway agentic sessions. Defaults to <c>5</c>.
     /// </summary>
     public int MaxTurns { get; init; } = MaxTurnsDefault;
+
+    /// <summary>
+    /// Estimated token count at which the REPL loop compacts conversation history.
+    /// Defaults to <c>40,000</c> — roughly half of a typical 80K context window,
+    /// leaving headroom for the heuristic's imprecision before the hard limit is reached.
+    /// </summary>
+    public int CompactionThresholdTokens { get; init; } = CompactionThresholdTokensDefault;
 }

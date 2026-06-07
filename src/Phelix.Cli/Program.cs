@@ -2,10 +2,17 @@ using Microsoft.Extensions.AI;
 using OpenTelemetry.Trace;
 using Phelix.Cli;
 using Phelix.Core.Agent;
+using Phelix.Core.Session;
 using Phelix.Tui;
 
-(AgentLoop agentLoop, TracerProvider? tracerProvider) = PhelixHost.Build();
+(AgentLoop agentLoop,
+ ISessionStore sessionStore,
+ ICompactionPolicy compactionPolicy,
+ ISessionSummarizer summarizer,
+ TracerProvider? tracerProvider) = PhelixHost.Build();
+
 using TracerProvider? _ = tracerProvider;
+using IDisposable sessionStoreDisposable = (IDisposable)sessionStore;
 
 IReadOnlyList<ChatMessage> conversationHistory = [];
 
@@ -39,15 +46,30 @@ while (true)
 
         conversationHistory = completedTurn.ContextMessages;
 
-        Phelix.Core.Session.TurnRecord record = Phelix.Core.Session.TurnRecord.FromTurn(
+        TurnRecord record = TurnRecord.FromTurn(
             completedTurn,
-            sessionId: Phelix.Core.Session.SessionLogger.SessionId,
+            sessionId: SessionLogger.SessionId,
             userMessage: userPrompt,
             turnId: turnId,
             startedAt: startedAt
         );
 
-        await Phelix.Core.Session.SessionLogger.AppendAsync(record);
+        await SessionLogger.AppendAsync(record);
+        await sessionStore.AppendAsync(record);
+
+        if (compactionPolicy.ShouldCompact(conversationHistory))
+        {
+            string summary = await summarizer.SummarizeAsync(SessionLogger.SessionId);
+
+            if (!string.IsNullOrEmpty(summary))
+            {
+                conversationHistory =
+                [
+                    new ChatMessage(ChatRole.System, $"[Session compacted]\n\n{summary}")
+                ];
+                Console.WriteLine("[context compacted — summary injected]");
+            }
+        }
     }
     catch (Exception ex)
     {

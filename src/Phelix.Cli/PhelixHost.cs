@@ -6,6 +6,7 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Phelix.Core.Agent;
 using Phelix.Core.Config;
+using Phelix.Core.Session;
 using Phelix.Core.Telemetry;
 using Phelix.Core.Tools;
 
@@ -22,17 +23,25 @@ namespace Phelix.Cli;
 internal static class PhelixHost
 {
     /// <summary>
-    /// Constructs and returns the <see cref="AgentLoop"/> and an optional <see cref="TracerProvider"/>.
+    /// Constructs and returns all application components needed to run the REPL loop.
     /// </summary>
     /// <remarks>
-    /// The caller is responsible for disposing <paramref name="tracerProvider"/> when the session ends.
-    /// When <c>OTEL_EXPORTER_OTLP_ENDPOINT</c> is not set, <paramref name="tracerProvider"/> is <c>null</c>
-    /// and tracing is a no-op with zero overhead.
+    /// The caller is responsible for disposing <c>SessionStore</c> and
+    /// <paramref name="tracerProvider"/> (via the returned tuple) when the session ends.
+    /// When <c>OTEL_EXPORTER_OTLP_ENDPOINT</c> is not set, <c>TracerProvider</c> is
+    /// <c>null</c> and tracing is a no-op with zero overhead.
     /// </remarks>
     /// <returns>
-    /// A tuple of the configured <see cref="AgentLoop"/> and an optional <see cref="TracerProvider"/>.
+    /// A named tuple containing the configured <see cref="AgentLoop"/>,
+    /// <see cref="ISessionStore"/>, <see cref="ICompactionPolicy"/>,
+    /// <see cref="ISessionSummarizer"/>, and an optional <see cref="TracerProvider"/>.
     /// </returns>
-    internal static (AgentLoop AgentLoop, TracerProvider? TracerProvider) Build()
+    internal static (
+        AgentLoop AgentLoop,
+        ISessionStore SessionStore,
+        ICompactionPolicy CompactionPolicy,
+        ISessionSummarizer Summarizer,
+        TracerProvider? TracerProvider) Build()
     {
         PhelixConfig config = ConfigLoader.Load();
         ModelConfig activeModel = config.Models[config.ActiveModel];
@@ -70,15 +79,24 @@ internal static class PhelixHost
             MaxTurns = activeModel.MaxTurns
         };
 
+        SqliteSessionStore sessionStore = new(SessionLogger.SessionId);
+
+        ICompactionPolicy compactionPolicy =
+            new TokenThresholdPolicy(agentOptions.CompactionThresholdTokens);
+
+        ISessionSummarizer summarizer =
+            new ModelSessionSummarizer(chatClient, sessionStore);
+
         ToolRegistry toolRegistry = new();
         toolRegistry.Register(new ReadFileTool());
         toolRegistry.Register(new WriteFileTool());
         toolRegistry.Register(new BashTool());
         toolRegistry.Register(new ListFilesTool());
         toolRegistry.Register(new SearchCodeTool());
+        toolRegistry.Register(new SearchSessionTool(sessionStore));
 
         AgentLoop agentLoop = new(chatClient, agentOptions, toolRegistry);
 
-        return (agentLoop, tracerProvider);
+        return (agentLoop, sessionStore, compactionPolicy, summarizer, tracerProvider);
     }
 }
