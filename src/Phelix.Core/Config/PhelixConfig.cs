@@ -61,4 +61,11 @@ public record PhelixConfig
     /// <see cref="ActiveModel"/> must match one of these keys.
     /// </summary>
     public required IReadOnlyDictionary<string, ModelConfig> Models { get; init; }
+
+    /// <summary>
+    /// Global retry policy applied to all models that do not specify their own
+    /// <see cref="ModelConfig.Retry"/> override. Falls back to <see cref="RetryPolicy.Default"/>
+    /// when <c>null</c>.
+    /// </summary>
+    public RetryPolicy? Retry { get; init; }
 }

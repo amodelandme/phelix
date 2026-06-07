@@ -65,10 +65,13 @@ internal static class PhelixHost
             new OpenAIClientOptions { Endpoint = new Uri(provider.BaseUrl) }
         );
 
+        RetryPolicy retryPolicy = ConfigLoader.ResolveRetryPolicy(config, activeModel);
+
         // Potential prompt injection vector if ModelId is user-controlled — in production,
         // validate against an allowlist or use separate credentials per model.
         IChatClient chatClient = new ChatClientBuilder(
                 openAiClient.GetChatClient(activeModel.ModelId).AsIChatClient())
+            .Use(inner => new RetryingChatClient(inner, retryPolicy))
             .UseOpenTelemetry(loggerFactory: null, sourceName: PhelixTelemetry.SourceName)
             .Build();
 
