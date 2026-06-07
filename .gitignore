@@ -483,3 +483,5 @@ $RECYCLE.BIN/
 
 # Architecture/Agent files
 .claude/
+docs/IDEAS.md
+docs/NOTES.md

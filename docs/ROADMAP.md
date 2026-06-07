@@ -20,11 +20,8 @@ YAML config at `~/.phelix/config.yaml`; named provider and model profiles; `ICon
 ### ~~Session schema redesign~~ ✓ done
 `SessionEntry` replaced by `TurnRecord`. Tool calls, token usage, exit reason, turn/session IDs, and start/end timestamps are now fully persisted. `bool` fields replaced with typed enums (`ToolCallStatus`, `SensorStatus`). `TurnEvent` hierarchy reserved for Phase 3 sensor results. Spec and implementation in `docs/decisions/session-schema-redesign/`.
 
-### Session log: enum serialization
-`exitReason`, `toolCallStatus`, and `sensorStatus` serialize as integers (`0`, `1`) instead of their string names (`"Completed"`, `"Succeeded"`). The log is unreadable without the source.
-- Add `[JsonConverter(typeof(JsonStringEnumConverter))]` to `TurnExitReason`, `ToolCallStatus`, and `SensorStatus`
-- Or register the converter globally in `SessionLogger.JsonOptions`
-- Verify the fix with `jq` against a real session file
+### ~~Session log: enum serialization~~ ✓ done
+`[JsonConverter(typeof(JsonStringEnumConverter))]` applied to `TurnExitReason`, `ToolCallStatus`, and `SensorStatus`. Enums now serialize as `"Completed"`, `"Succeeded"`, etc. instead of integers.
 
 ### ~~Session log: `list_files` glob scopes into `.git`~~ ✓ done
 `ExcludedDirectories` property on `ListFilesTool` defaults to `{ ".git", "bin", "obj" }`. Segment-exact filtering applied after glob resolution. Description updated to guide toward scoped patterns. Spec and implementation in `docs/decisions/list-files-glob-scoping/`.
@@ -36,6 +33,13 @@ YAML config at `~/.phelix/config.yaml`; named provider and model profiles; `ICon
 `conversationHistory` is an unbounded list — every turn sends the full history to the model. Accumulated tool results compound the cost significantly.
 - Detect when history approaches a threshold (half the context window)
 - Summarize older turns into a single condensed message; discard the raw turns
+
+### Session continuity after compaction
+When the context window compacts, the agent loses everything — what it was doing, what it decided, what tools it called. This is a separate problem from compaction itself.
+- Persist session events (file edits, tool calls, errors, decisions) to SQLite in real time via `SessionLogger` — the schema is already in place
+- On session start (or post-compaction resume), inject a compact markdown summary (~300 tokens) reconstructed from the session DB rather than replaying raw history
+- Index large tool outputs to SQLite FTS5 (`Microsoft.Data.Sqlite`) instead of keeping them in `conversationHistory`; return a pointer to the agent and let it query on demand via a `search_session` tool
+- Reference: context-mode (https://github.com/mksglu/context-mode) — TypeScript/Node.js MCP server that proved this pattern at scale (98% token reduction, 16K stars). Architecture is fully replicable in native C#; no dependency needed.
 
 ### Retry / circuit breaker
 A 429 or transient network error kills the session.
@@ -72,6 +76,15 @@ The agent retries from scratch on failure. The right pattern is explicit plan-be
 `SearchCodeTool` handles only exact-string or regex matches. Queries like "error handling for authentication" return nothing if the code uses different vocabulary.
 - Embedding-based search (text-embedding-3-small or local ONNX model) for conceptual queries
 - Add as an optional mode alongside BM25, not a replacement
+
+### Codebase knowledge graph (Roslyn-based)
+The agent orients itself by reading raw files — expensive and shallow. A semantic graph built from the codebase gives the agent a compact, queryable map of the project structure.
+- Walk `.cs` files via Roslyn's semantic model (not tree-sitter) — captures classes, methods, fields, call edges, inheritance, and symbol bindings with full type resolution
+- Parse `.csproj` / solution files for project dependency graph and NuGet references
+- Index DI registrations, attribute routing, and middleware pipeline (patterns invisible to AST-only tools)
+- Expose via a `search_graph` tool: the agent queries the graph instead of reading raw files
+- Pipeline: detect → extract → build graph → cluster → analyze → export (JSON + optional HTML)
+- Reference: graphify (https://github.com/safishamsi/graphify) — Python/tree-sitter tool that proved the pattern at scale (61.5k stars, 71.5x token reduction on large repos). C# support exists but is surface-level; Roslyn gives significantly deeper semantics. No Python dependency needed.
 
 ### Skills system
 No mechanism to externalize expertise or reuse step-by-step instruction sets across sessions.
