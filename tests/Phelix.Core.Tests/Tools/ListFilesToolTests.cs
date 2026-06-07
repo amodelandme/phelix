@@ -152,6 +152,20 @@ public class ListFilesToolTests : IDisposable
     }
 
     [Fact]
+    public async Task ListFilesTool_ResultsAreRelativePaths()
+    {
+        CreateFile(Path.Combine("src", "Foo.cs"));
+        ListFilesTool tool = Tool();
+
+        string result = await tool.ExecuteAsync(
+            new Dictionary<string, object?> { ["pattern"] = "**/*.cs" },
+            CancellationToken.None);
+
+        Assert.Contains("src/Foo.cs".Replace('/', Path.DirectorySeparatorChar), result);
+        Assert.DoesNotContain(_root, result);
+    }
+
+    [Fact]
     public async Task ListFilesTool_EmptyExcludedDirectories_IncludesAll()
     {
         CreateFile(Path.Combine(".git", "config"));

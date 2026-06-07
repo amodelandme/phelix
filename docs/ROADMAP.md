@@ -34,6 +34,8 @@ Tool results are appended as-is. A `bash` call that dumps 20,000 lines consumes 
 - Add `TruncateToolOutput(string result, int maxChars)` helper in `AgentLoop`
 - Applied before appending any tool result to the message list
 
+**Partial:** `list_files` now returns paths relative to `RootDirectory` instead of absolute paths, removing the repeated root prefix from every result line. Spec and implementation in `docs/decisions/tool-output-truncation/`.
+
 ### Context compaction
 `conversationHistory` is an unbounded list — every turn sends the full history to the model. Accumulated tool results compound the cost significantly.
 - Detect when history approaches a threshold (half the context window)

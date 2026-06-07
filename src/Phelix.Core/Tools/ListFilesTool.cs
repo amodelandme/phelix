@@ -90,7 +90,7 @@ public class ListFilesTool : ITool
         int limit = Math.Min(total, maxResults);
         for (int i = 0; i < limit; i++)
         {
-            sb.AppendLine(matches[i]);
+            sb.AppendLine(Path.GetRelativePath(RootDirectory, matches[i]));
         }
 
         if (total > maxResults)
