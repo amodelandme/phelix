@@ -69,7 +69,7 @@ public class BashTool : ITool
                 return $"Error: could not resolve working_directory '{requestedDir}': {ex.Message}";
             }
 
-            if (!absoluteDir.StartsWith(RootDirectory, StringComparison.Ordinal))
+            if (!ReadFileTool.IsWithinRoot(RootDirectory, absoluteDir))
                 return $"Error: working_directory '{absoluteDir}' is outside the allowed root '{RootDirectory}'.";
 
             if (!Directory.Exists(absoluteDir))

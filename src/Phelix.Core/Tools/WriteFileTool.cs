@@ -58,7 +58,7 @@ public class WriteFileTool : ITool
             return $"Error: could not resolve path '{requestedPath}': {ex.Message}";
         }
 
-        if (!absolutePath.StartsWith(RootDirectory, StringComparison.Ordinal))
+        if (!ReadFileTool.IsWithinRoot(RootDirectory, absolutePath))
             return $"Error: path '{absolutePath}' is outside the allowed root '{RootDirectory}'.";
 
         try

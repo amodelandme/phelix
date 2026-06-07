@@ -54,7 +54,7 @@ public sealed class SqliteSessionStore : ISessionStore, IDisposable
 
         string toolCallsJson = JsonSerializer.Serialize(record.ToolCalls);
 
-        SqliteCommand insertTurn = _connection.CreateCommand();
+        await using SqliteCommand insertTurn = _connection.CreateCommand();
         insertTurn.Transaction = transaction;
         insertTurn.CommandText = """
             INSERT INTO turns
@@ -81,9 +81,9 @@ public sealed class SqliteSessionStore : ISessionStore, IDisposable
 
         await insertTurn.ExecuteNonQueryAsync(cancellationToken);
 
-        foreach (ToolCallRecord toolCall in record.ToolCalls)
+        if (record.ToolCalls.Count > 0)
         {
-            SqliteCommand insertOutput = _connection.CreateCommand();
+            await using SqliteCommand insertOutput = _connection.CreateCommand();
             insertOutput.Transaction = transaction;
             insertOutput.CommandText = """
                 INSERT INTO tool_outputs
@@ -92,13 +92,21 @@ public sealed class SqliteSessionStore : ISessionStore, IDisposable
                     ($turnId, $sessionId, $toolName, $argumentsJson, $result)
                 """;
 
-            insertOutput.Parameters.AddWithValue("$turnId", record.TurnId);
-            insertOutput.Parameters.AddWithValue("$sessionId", record.SessionId);
-            insertOutput.Parameters.AddWithValue("$toolName", toolCall.Name);
-            insertOutput.Parameters.AddWithValue("$argumentsJson", toolCall.ArgumentsJson);
-            insertOutput.Parameters.AddWithValue("$result", toolCall.Result);
+            SqliteParameter pTurnId     = insertOutput.Parameters.Add("$turnId",        SqliteType.Text);
+            SqliteParameter pSessionId  = insertOutput.Parameters.Add("$sessionId",     SqliteType.Text);
+            SqliteParameter pToolName   = insertOutput.Parameters.Add("$toolName",      SqliteType.Text);
+            SqliteParameter pArgJson    = insertOutput.Parameters.Add("$argumentsJson", SqliteType.Text);
+            SqliteParameter pResult     = insertOutput.Parameters.Add("$result",        SqliteType.Text);
 
-            await insertOutput.ExecuteNonQueryAsync(cancellationToken);
+            foreach (ToolCallRecord toolCall in record.ToolCalls)
+            {
+                pTurnId.Value    = record.TurnId;
+                pSessionId.Value = record.SessionId;
+                pToolName.Value  = toolCall.Name;
+                pArgJson.Value   = toolCall.ArgumentsJson;
+                pResult.Value    = toolCall.Result;
+                await insertOutput.ExecuteNonQueryAsync(cancellationToken);
+            }
         }
 
         await transaction.CommitAsync(cancellationToken);
@@ -109,7 +117,7 @@ public sealed class SqliteSessionStore : ISessionStore, IDisposable
         string sessionId,
         CancellationToken cancellationToken = default)
     {
-        SqliteCommand command = _connection.CreateCommand();
+        await using SqliteCommand command = _connection.CreateCommand();
         command.CommandText = """
             SELECT turn_id, session_id, user_message, final_assistant_message,
                    model_id, started_at, completed_at, exit_reason,
@@ -162,7 +170,7 @@ public sealed class SqliteSessionStore : ISessionStore, IDisposable
         if (string.IsNullOrWhiteSpace(sanitizedQuery))
             return [];
 
-        SqliteCommand command = _connection.CreateCommand();
+        await using SqliteCommand command = _connection.CreateCommand();
         command.CommandText = """
             SELECT tool_name, arguments_json, result
             FROM tool_outputs

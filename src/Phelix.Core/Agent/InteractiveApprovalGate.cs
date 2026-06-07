@@ -71,8 +71,8 @@ public sealed class InteractiveApprovalGate(SessionMode mode, TextReader input, 
         CancellationToken cancellationToken)
     {
         string hint = requireFullYes ? "[type 'yes' to allow]" : "[y/N]";
-        await output.WriteLineAsync($"\n  Tool: {toolName}");
-        await output.WriteLineAsync($"  {callSummary}");
+        await output.WriteLineAsync($"\n  Tool: {ControlCharSanitizer.Sanitize(toolName)}");
+        await output.WriteLineAsync($"  {ControlCharSanitizer.Sanitize(callSummary)}");
         await output.WriteAsync($"  Allow? {hint} ");
 
         string? response = await input.ReadLineAsync(cancellationToken);
