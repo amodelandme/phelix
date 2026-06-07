@@ -10,6 +10,7 @@ using Phelix.Core.Context;
 using Phelix.Core.Session;
 using Phelix.Core.Telemetry;
 using Phelix.Core.Tools;
+using Phelix.Tui;
 
 namespace Phelix.Cli;
 
@@ -31,7 +32,15 @@ internal static class PhelixHost
     /// <paramref name="tracerProvider"/> (via the returned tuple) when the session ends.
     /// When <c>OTEL_EXPORTER_OTLP_ENDPOINT</c> is not set, <c>TracerProvider</c> is
     /// <c>null</c> and tracing is a no-op with zero overhead.
+    ///
+    /// When <paramref name="mode"/> is <see cref="SessionMode.AllowAll"/>, a warning is
+    /// printed to <c>stdout</c> before the REPL starts. All tool calls will execute without
+    /// any approval prompts for the duration of the session.
     /// </remarks>
+    /// <param name="mode">
+    /// Controls how much friction is applied to tool calls. Defaults to
+    /// <see cref="SessionMode.Default"/> (interactive approval).
+    /// </param>
     /// <returns>
     /// A named tuple containing the configured <see cref="AgentLoop"/>,
     /// <see cref="ISessionStore"/>, <see cref="ICompactionPolicy"/>,
@@ -42,7 +51,7 @@ internal static class PhelixHost
         ISessionStore SessionStore,
         ICompactionPolicy CompactionPolicy,
         ISessionSummarizer Summarizer,
-        TracerProvider? TracerProvider) Build()
+        TracerProvider? TracerProvider) Build(SessionMode mode = SessionMode.Default)
     {
         PhelixConfig config = ConfigLoader.Load();
         ModelConfig activeModel = config.Models[config.ActiveModel];
@@ -80,11 +89,14 @@ internal static class PhelixHost
             config.SystemPrompt,
             Directory.GetCurrentDirectory());
 
+        IApprovalGate approvalGate = BuildApprovalGate(mode);
+
         AgentOptions agentOptions = new()
         {
             ModelId = activeModel.ModelId,
             SystemPrompt = systemPrompt,
-            MaxTurns = activeModel.MaxTurns
+            MaxTurns = activeModel.MaxTurns,
+            ApprovalGate = approvalGate
         };
 
         SqliteSessionStore sessionStore = new(SessionLogger.SessionId);
@@ -106,5 +118,21 @@ internal static class PhelixHost
         AgentLoop agentLoop = new(chatClient, agentOptions, toolRegistry);
 
         return (agentLoop, sessionStore, compactionPolicy, summarizer, tracerProvider);
+    }
+
+    /// <summary>
+    /// Builds the <see cref="IApprovalGate"/> for <paramref name="mode"/> and prints
+    /// the allow-all warning when <see cref="SessionMode.AllowAll"/> is active.
+    /// </summary>
+    static IApprovalGate BuildApprovalGate(SessionMode mode)
+    {
+        if (mode == SessionMode.AllowAll)
+        {
+            TerminalRenderer.WriteWarning(
+                "Running in allow-all mode. All tool calls will execute without approval prompts.");
+            return new AutoApproveGate();
+        }
+
+        return new InteractiveApprovalGate(mode, Console.In, Console.Out);
     }
 }

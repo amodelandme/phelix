@@ -1,4 +1,5 @@
 using Microsoft.Extensions.AI;
+using Phelix.Core.Agent;
 
 namespace Phelix.Core.Tools;
 
@@ -13,6 +14,12 @@ public interface ITool
 
     /// <summary>Natural-language description passed to the model so it knows when to call this tool.</summary>
     string Description { get; }
+
+    /// <summary>
+    /// The level of user approval required before this tool may execute.
+    /// Consulted by <see cref="IApprovalGate"/> at dispatch time.
+    /// </summary>
+    ApprovalTier ApprovalTier { get; }
 
     /// <summary>
     /// Executes the tool with the arguments the model supplied.

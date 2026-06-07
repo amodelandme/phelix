@@ -20,4 +20,11 @@ public static class TerminalRenderer
         Console.Write(chunk);
         return Task.CompletedTask;
     }
+
+    /// <summary>
+    /// Writes a warning message to stdout, visually distinct from normal output.
+    /// </summary>
+    /// <param name="message">The warning text to display.</param>
+    public static void WriteWarning(string message) =>
+        Console.WriteLine($"Warning: {message}");
 }

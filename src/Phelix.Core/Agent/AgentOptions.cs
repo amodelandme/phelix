@@ -37,4 +37,16 @@ public record AgentOptions
     /// leaving headroom for the heuristic's imprecision before the hard limit is reached.
     /// </summary>
     public int CompactionThresholdTokens { get; init; } = CompactionThresholdTokensDefault;
+
+    /// <summary>
+    /// The gate consulted before each tool call to decide whether the call may proceed.
+    /// Defaults to <see cref="AutoApproveGate"/> when <c>null</c> — matching the previous
+    /// behaviour where all tools executed without interruption.
+    /// </summary>
+    /// <remarks>
+    /// Supply an <see cref="InteractiveApprovalGate"/> for interactive sessions or a
+    /// custom implementation in tests. The gate is set once at startup and is constant
+    /// for the lifetime of the session.
+    /// </remarks>
+    public IApprovalGate ApprovalGate { get; init; } = new AutoApproveGate();
 }
