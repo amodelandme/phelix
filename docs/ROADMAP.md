@@ -6,10 +6,8 @@
 ### ~~1. Turn limit feedback~~ ✓ done — PR #10
 `TurnExitReason` enum on `Turn`; `[turn limit reached]` printed in CLI when `MaxTurns` is hit.
 
-### 2. Thinking indicator
-Blank screen from prompt submission to first streamed token. Reasoning models can think for 10+ seconds with no visible activity.
-- Fix: spinner from the moment the user hits Enter until the first chunk arrives via `onChunk`
-- Owner: `TerminalRenderer` in `Phelix.Tui`
+### ~~2. Thinking indicator~~ → deferred to TUI phase
+Spinner from prompt submission to first token. Moved — implement as part of the Rich TUI milestone alongside `TerminalRenderer`.
 
 ### ~~3. Config layer~~ ✓ done — PR #11
 YAML config at `~/.phelix/config.yaml`; named provider and model profiles; `IConfigProvider` seam for TUI. Falls back to defaults when absent.
