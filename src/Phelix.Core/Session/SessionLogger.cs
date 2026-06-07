@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Phelix.Core.Agent;
 
 namespace Phelix.Core.Session;
 
@@ -8,7 +7,7 @@ namespace Phelix.Core.Session;
 /// </summary>
 /// <remarks>
 /// One <c>.jsonl</c> file per session, located at <c>~/.phelix/sessions/</c>.
-/// Each line is a self-contained <see cref="SessionEntry"/> — parseable independently,
+/// Each line is a self-contained <see cref="TurnRecord"/> — parseable independently,
 /// no array wrapper needed. The directory is created on first write if absent.
 /// </remarks>
 public static class SessionLogger
@@ -18,27 +17,25 @@ public static class SessionLogger
         ".phelix", "sessions"
     );
 
-    static readonly string SessionId = Guid.NewGuid().ToString("N");
+    public static readonly string SessionId = Guid.NewGuid().ToString("N");
 
-    static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
+    static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
     /// <summary>
-    /// Serializes <paramref name="turn"/> as a <see cref="SessionEntry"/> and appends it
-    /// to <paramref name="filePath"/> as a single JSON line.
+    /// Serializes <paramref name="record"/> and appends it to <paramref name="filePath"/>
+    /// as a single JSON line.
     /// </summary>
-    /// <param name="turn">The completed turn to log.</param>
-    /// <param name="userMessage">The user prompt that produced this turn.</param>
+    /// <param name="record">The completed turn record to log.</param>
     /// <param name="filePath">
     /// Destination <c>.jsonl</c> file. When <c>null</c>, a timestamped file in
     /// <c>~/.phelix/sessions/</c> is used. Pass an explicit path in tests.
     /// </param>
     /// <param name="cancellationToken">Propagates cancellation to the file write.</param>
     public static async Task AppendAsync(
-        Turn turn,
-        string userMessage,
+        TurnRecord record,
         string? filePath = null,
         CancellationToken cancellationToken = default)
     {
@@ -46,8 +43,7 @@ public static class SessionLogger
 
         Directory.CreateDirectory(Path.GetDirectoryName(resolvedPath)!);
 
-        SessionEntry entry = SessionEntry.FromTurn(turn, userMessage);
-        string line = JsonSerializer.Serialize(entry, JsonOptions);
+        string line = JsonSerializer.Serialize(record, JsonOptions);
 
         await File.AppendAllTextAsync(resolvedPath, line + Environment.NewLine, cancellationToken);
     }

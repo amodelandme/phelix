@@ -27,6 +27,9 @@ while (true)
 
     try
     {
+        string turnId = Guid.NewGuid().ToString("N");
+        DateTimeOffset startedAt = DateTimeOffset.UtcNow;
+
         Turn completedTurn = await agentLoop.RunTurnAsync(conversationHistory, userPrompt, TerminalRenderer.WriteChunk);
 
         Console.WriteLine();
@@ -36,7 +39,15 @@ while (true)
 
         conversationHistory = completedTurn.Messages;
 
-        await Phelix.Core.Session.SessionLogger.AppendAsync(completedTurn, userPrompt);
+        Phelix.Core.Session.TurnRecord record = Phelix.Core.Session.TurnRecord.FromTurn(
+            completedTurn,
+            sessionId: Phelix.Core.Session.SessionLogger.SessionId,
+            userMessage: userPrompt,
+            turnId: turnId,
+            startedAt: startedAt
+        );
+
+        await Phelix.Core.Session.SessionLogger.AppendAsync(record);
     }
     catch (Exception ex)
     {
