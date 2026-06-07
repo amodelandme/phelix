@@ -173,8 +173,14 @@ A session is the unit of work. A session has:
 - A turn history (messages + tool calls + sensor results)
 - A configuration snapshot (which skills were active, which model was used)
 
-Sessions are persisted as newline-delimited JSON to `~/.phelix/sessions/`.
-Each turn appends a JSON record. The file is append-only and human-readable.
+Sessions are persisted in two complementary stores:
+
+- **JSONL log** (`~/.phelix/sessions/<sessionId>.jsonl`) — append-only, human-readable, one JSON record per turn. The audit trail.
+- **SQLite database** (`~/.phelix/sessions/<sessionId>.db`) — queryable, FTS5-indexed. Backs context compaction and the `search_session` tool.
+
+Both files share the same session UUID as their base name. The SQLite store is additive — the JSONL log is unchanged.
+
+**Context compaction** fires when estimated token count of `conversationHistory` crosses `AgentOptions.CompactionThresholdTokens` (default 40,000). The full history is replaced with a single model-generated summary reconstructed from the SQLite store. The `search_session` tool lets the model query detailed tool outputs from earlier in the session after compaction.
 
 ---
 
@@ -250,7 +256,13 @@ phelix/
 │   │   │   ├── ToolCallStatus.cs    # Succeeded / Failed dispatch outcome
 │   │   │   ├── UsageSummary.cs      # Aggregate token counts for a turn
 │   │   │   ├── TurnEvent.cs         # Extension point for Phase 3 sensor results
-│   │   │   └── SensorStatus.cs      # Passed / Failed / Skipped sensor outcome
+│   │   │   ├── SensorStatus.cs      # Passed / Failed / Skipped sensor outcome
+│   │   │   ├── ISessionStore.cs     # Read/write interface over durable turn storage
+│   │   │   ├── SqliteSessionStore.cs # ISessionStore backed by SQLite + FTS5
+│   │   │   ├── ICompactionPolicy.cs # Decides whether to compact given a message list
+│   │   │   ├── TokenThresholdPolicy.cs # ICompactionPolicy: fires at N estimated tokens
+│   │   │   ├── ISessionSummarizer.cs # Produces a summary string from stored turns
+│   │   │   └── ModelSessionSummarizer.cs # ISessionSummarizer: calls the model to summarize
 │   │   ├── Tools/
 │   │   │   ├── ITool.cs             # Tool contract
 │   │   │   ├── ToolRegistry.cs      # Registers and dispatches tools by name
@@ -258,7 +270,8 @@ phelix/
 │   │   │   ├── WriteFileTool.cs
 │   │   │   ├── BashTool.cs
 │   │   │   ├── ListFilesTool.cs
-│   │   │   └── SearchCodeTool.cs
+│   │   │   ├── SearchCodeTool.cs
+│   │   │   └── SearchSessionTool.cs # FTS5 query over stored tool outputs (post-compaction recall)
 │   │   ├── Telemetry/
 │   │   │   └── PhelixTelemetry.cs   # ActivitySource + span/tag name constants
 │   │   └── Phelix.Core.csproj
@@ -521,7 +534,7 @@ Goal: `PHELIX.md` and skills work end-to-end.
 
 - `PhelixMdLoader` — walk dirs, merge configs
 - `SkillLoader` — on-demand skill injection
-- `Compactor` — basic compaction when context limit approaches
+- ~~`Compactor`~~ — delivered early as part of the context compaction feature (see `docs/decisions/context-compaction/`)
 - `SearchCodeTool`, `RoslynDiagnosticsTool` (tool-callable version)
 
 ### Phase 5 — Polish + release (weeks 9–10)
@@ -543,7 +556,8 @@ Goal: `dotnet tool install -g phelix` works. README is complete.
 | `Microsoft.Extensions.AI` over Semantic Kernel | Lower abstraction level, less opinion, easier to reason about, SK builds on top of it anyway |
 | `Spectre.Console` over raw ANSI | Battle-tested, good WezTerm/Linux support, rich without being heavy |
 | Roslyn over tree-sitter | Native C# semantics, not just syntax. First-class in the .NET SDK. |
-| JSON session log over SQLite | Human-readable, append-only, no schema migrations, trivially greppable |
+| JSONL session log kept alongside SQLite | JSONL stays as the human-readable audit trail; SQLite is additive for queryability and compaction. Neither replaces the other. |
+| SQLite for session store | FTS5 full-text search over tool outputs, atomic writes, survives process restarts. One file per session — matches JSONL naming. |
 | Append-only session file | Audit trail, replayable, survives crashes without corruption |
 
 ---
