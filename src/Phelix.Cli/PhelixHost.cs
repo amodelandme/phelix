@@ -6,6 +6,7 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Phelix.Core.Agent;
 using Phelix.Core.Config;
+using Phelix.Core.Context;
 using Phelix.Core.Session;
 using Phelix.Core.Telemetry;
 using Phelix.Core.Tools;
@@ -75,10 +76,14 @@ internal static class PhelixHost
             .UseOpenTelemetry(loggerFactory: null, sourceName: PhelixTelemetry.SourceName)
             .Build();
 
+        string systemPrompt = AgentsMdLoader.Load(
+            config.SystemPrompt,
+            Directory.GetCurrentDirectory());
+
         AgentOptions agentOptions = new()
         {
             ModelId = activeModel.ModelId,
-            SystemPrompt = config.SystemPrompt,
+            SystemPrompt = systemPrompt,
             MaxTurns = activeModel.MaxTurns
         };
 
