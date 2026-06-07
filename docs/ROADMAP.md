@@ -41,6 +41,19 @@ YAML config at `~/.phelix/config.yaml`; named provider and model profiles; `ICon
 ### ~~Tiered approval friction~~ ✓ done — PR #22
 `ApprovalTier` on `ITool` (`Auto` / `Prompt` / `Confirm`) declares per-tool approval requirements. `IApprovalGate` is consulted by `AgentLoop` before every dispatch. `SessionMode` (`Default` / `AcceptsEdits` / `AllowAll`) controls gate behaviour; `--accepts-edits` and `--allow-all` flags set the mode at startup. Denied calls are recorded as `ToolCallStatus.Denied`. Spec and implementation in `docs/decisions/tiered-approval-friction/`.
 
+### ~~Codebase audit & hardening~~ ✓ done — PR #23
+Full hypothesis-driven audit against four pillars: high-performance .NET 10, context engineering, vendor independence, and extensibility. Seven findings resolved:
+
+- **C-1 (critical):** Path containment in `ReadFileTool`, `WriteFileTool`, and `BashTool` replaced `StartsWith` with `Path.GetRelativePath`-based `IsWithinRoot` guard — closes directory-boundary false positive where sibling paths (e.g. `/root-evil`) passed a `/root` prefix check.
+- **ANSI spoofing hardening:** `ControlCharSanitizer` added; wired into `InteractiveApprovalGate` so model-controlled tool names and call summaries have all C0/C1 control characters and ANSI escape sequences replaced with visible literals before being printed for user approval.
+- **W-2:** `SqliteCommand` disposal fixed across all four command sites in `SqliteSessionStore`; `tool_outputs` insert command now created once per `AppendAsync` call with parameters rebound per iteration rather than reallocated.
+- **O-1:** `AgentLoop` message list uses C# 14 spread `[.. conversationHistory, msg]` for exact-capacity allocation; `toolResults` preallocated from `Contents.Count`.
+- **O-2:** `TokenThresholdPolicy.ShouldCompact` replaced double LINQ chain with zero-allocation `foreach` loops.
+- **O-3:** Streaming retry buffer in `RetryingChatClient` preallocated at capacity 128.
+- **O-4:** `UsageSummary` promoted from `record class` to `readonly record struct`.
+
+Full audit report, design decisions, and confirmed-correct inventory in `docs/audit-and-hardening-2026-06-07.md`.
+
 ---
 
 ## Backlog
