@@ -78,7 +78,8 @@ public class FileConfigProvider(string filePath) : IConfigProvider
                 {
                     Provider = kv.Value.Provider ?? throw new ConfigException($"Model '{kv.Key}' is missing 'provider'."),
                     ModelId = kv.Value.ModelId ?? throw new ConfigException($"Model '{kv.Key}' is missing 'model_id'."),
-                    MaxTurns = kv.Value.MaxTurns ?? 5
+                    MaxTurns = kv.Value.MaxTurns ?? 5,
+                    Retry = MapRetryPolicy(kv.Value.Retry)
                 },
                 StringComparer.Ordinal);
 
@@ -93,7 +94,27 @@ public class FileConfigProvider(string filePath) : IConfigProvider
             ActiveModel = activeModel,
             SystemPrompt = systemPrompt,
             Providers = providers,
-            Models = models
+            Models = models,
+            Retry = MapRetryPolicy(raw.Retry)
+        };
+    }
+
+    static RetryPolicy? MapRetryPolicy(RawRetryPolicy? raw)
+    {
+        if (raw is null)
+            return null;
+
+        RetryPolicy defaults = RetryPolicy.Default;
+
+        return new RetryPolicy
+        {
+            MaxRetries = raw.MaxRetries ?? defaults.MaxRetries,
+            BaseDelay = raw.BaseDelaySeconds.HasValue
+                ? TimeSpan.FromSeconds(raw.BaseDelaySeconds.Value)
+                : defaults.BaseDelay,
+            MaxDelay = raw.MaxDelaySeconds.HasValue
+                ? TimeSpan.FromSeconds(raw.MaxDelaySeconds.Value)
+                : defaults.MaxDelay
         };
     }
 
@@ -104,6 +125,7 @@ public class FileConfigProvider(string filePath) : IConfigProvider
         public string? SystemPrompt { get; set; }
         public Dictionary<string, RawProviderConfig> Providers { get; set; } = [];
         public Dictionary<string, RawModelConfig> Models { get; set; } = [];
+        public RawRetryPolicy? Retry { get; set; }
     }
 
     class RawProviderConfig
@@ -117,5 +139,13 @@ public class FileConfigProvider(string filePath) : IConfigProvider
         public string? Provider { get; set; }
         public string? ModelId { get; set; }
         public int? MaxTurns { get; set; }
+        public RawRetryPolicy? Retry { get; set; }
+    }
+
+    class RawRetryPolicy
+    {
+        public int? MaxRetries { get; set; }
+        public double? BaseDelaySeconds { get; set; }
+        public double? MaxDelaySeconds { get; set; }
     }
 }

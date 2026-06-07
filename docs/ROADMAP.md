@@ -32,10 +32,8 @@ YAML config at `~/.phelix/config.yaml`; named provider and model profiles; `ICon
 ### ~~Context compaction + session continuity~~ ✓ done
 `conversationHistory` compacts when estimated token count crosses `CompactionThresholdTokens` (default 40,000). Every turn is persisted to SQLite in real time. On compaction, history is replaced with a model-generated summary reconstructed from SQLite. The `search_session` tool lets the model query FTS5-indexed tool outputs from earlier in the session on demand. Spec and implementation in `docs/decisions/context-compaction/`.
 
-### Retry / circuit breaker
-A 429 or transient network error kills the session.
-- Exponential backoff wired into `ChatClientBuilder` middleware
-- Write spec in `docs/decisions/` first
+### ~~Retry / circuit breaker~~ ✓ done
+`RetryingChatClient` middleware in the `ChatClientBuilder` pipeline. Exponential backoff with ±20% jitter; retries on 429, 5xx, `TaskCanceledException`, `TimeoutException`, `IOException`. Streaming responses are buffered per attempt — no partial output on retry. Per-model `RetryPolicy` override with global fallback in config. Spec and implementation in `docs/decisions/retry-circuit-breaker/`.
 
 ### AGENTS.md per-repo loading
 Support loading a per-project `AGENTS.md` from the working directory on startup and injecting it into the system prompt.

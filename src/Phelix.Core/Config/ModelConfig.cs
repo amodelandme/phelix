@@ -26,4 +26,10 @@ public record ModelConfig
     /// <c>TurnExitReason.TurnLimitReached</c>. Defaults to 5 when not specified in config.
     /// </summary>
     public int MaxTurns { get; init; } = 5;
+
+    /// <summary>
+    /// Per-model retry policy override. When <c>null</c>, the global <see cref="PhelixConfig.Retry"/>
+    /// is used; if that is also <c>null</c>, <see cref="RetryPolicy.Default"/> applies.
+    /// </summary>
+    public RetryPolicy? Retry { get; init; }
 }

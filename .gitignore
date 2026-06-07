@@ -483,5 +483,9 @@ $RECYCLE.BIN/
 
 # Architecture/Agent files
 .claude/
-docs/IDEAS.md
-docs/NOTES.md
+
+# Personal scratch pad
+scratch/
+
+# Local environment variables
+.envrc
