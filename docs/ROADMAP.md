@@ -29,17 +29,8 @@ YAML config at `~/.phelix/config.yaml`; named provider and model profiles; `ICon
 ### ~~Tool output truncation~~ ✓ done
 `TruncateToolOutput` helper on `AgentLoop` caps every tool result at 2,000 characters using an 80/20 head/tail split before the result reaches the model or the session log. `list_files` also returns relative paths (PR #16). The ephemeral tool pattern (`ContextMessages` on `Turn`) strips raw tool exchange messages from history after each turn, preventing prior-turn tool output from compounding across the context window. Spec and implementation in `docs/decisions/tool-output-truncation/`.
 
-### Context compaction
-`conversationHistory` is an unbounded list — every turn sends the full history to the model. Accumulated tool results compound the cost significantly.
-- Detect when history approaches a threshold (half the context window)
-- Summarize older turns into a single condensed message; discard the raw turns
-
-### Session continuity after compaction
-When the context window compacts, the agent loses everything — what it was doing, what it decided, what tools it called. This is a separate problem from compaction itself.
-- Persist session events (file edits, tool calls, errors, decisions) to SQLite in real time via `SessionLogger` — the schema is already in place
-- On session start (or post-compaction resume), inject a compact markdown summary (~300 tokens) reconstructed from the session DB rather than replaying raw history
-- Index large tool outputs to SQLite FTS5 (`Microsoft.Data.Sqlite`) instead of keeping them in `conversationHistory`; return a pointer to the agent and let it query on demand via a `search_session` tool
-- Reference: context-mode (https://github.com/mksglu/context-mode) — TypeScript/Node.js MCP server that proved this pattern at scale (98% token reduction, 16K stars). Architecture is fully replicable in native C#; no dependency needed.
+### ~~Context compaction + session continuity~~ ✓ done
+`conversationHistory` compacts when estimated token count crosses `CompactionThresholdTokens` (default 40,000). Every turn is persisted to SQLite in real time. On compaction, history is replaced with a model-generated summary reconstructed from SQLite. The `search_session` tool lets the model query FTS5-indexed tool outputs from earlier in the session on demand. Spec and implementation in `docs/decisions/context-compaction/`.
 
 ### Retry / circuit breaker
 A 429 or transient network error kills the session.
