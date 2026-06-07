@@ -41,8 +41,11 @@ public class SessionLoggerTests : IDisposable
             ModelId = modelId,
         };
 
+        IReadOnlyList<ChatMessage> messages = [userMessage, assistantMessage];
+
         return new Turn(
-            Messages: [userMessage, assistantMessage],
+            Messages: messages,
+            ContextMessages: messages,
             Response: response,
             Timestamp: DateTimeOffset.UtcNow,
             Usage: new UsageSummary(100, 50),

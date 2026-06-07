@@ -5,6 +5,7 @@ namespace Phelix.Core.Agent;
 
 public record Turn(
     IReadOnlyList<ChatMessage> Messages,
+    IReadOnlyList<ChatMessage> ContextMessages,
     ChatResponse Response,
     DateTimeOffset Timestamp,
     UsageSummary Usage,

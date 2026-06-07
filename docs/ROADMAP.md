@@ -29,12 +29,8 @@ YAML config at `~/.phelix/config.yaml`; named provider and model profiles; `ICon
 ### ~~Session log: `list_files` glob scopes into `.git`~~ ✓ done
 `ExcludedDirectories` property on `ListFilesTool` defaults to `{ ".git", "bin", "obj" }`. Segment-exact filtering applied after glob resolution. Description updated to guide toward scoped patterns. Spec and implementation in `docs/decisions/list-files-glob-scoping/`.
 
-### Tool output truncation
-Tool results are appended as-is. A `bash` call that dumps 20,000 lines consumes the context window. Every tool result — including `list_files` blobs — is sent verbatim on every subsequent turn.
-- Add `TruncateToolOutput(string result, int maxChars)` helper in `AgentLoop`
-- Applied before appending any tool result to the message list
-
-**Partial:** `list_files` now returns paths relative to `RootDirectory` instead of absolute paths, removing the repeated root prefix from every result line. Spec and implementation in `docs/decisions/tool-output-truncation/`.
+### ~~Tool output truncation~~ ✓ done
+`TruncateToolOutput` helper on `AgentLoop` caps every tool result at 2,000 characters using an 80/20 head/tail split before the result reaches the model or the session log. `list_files` also returns relative paths (PR #16). The ephemeral tool pattern (`ContextMessages` on `Turn`) strips raw tool exchange messages from history after each turn, preventing prior-turn tool output from compounding across the context window. Spec and implementation in `docs/decisions/tool-output-truncation/`.
 
 ### Context compaction
 `conversationHistory` is an unbounded list — every turn sends the full history to the model. Accumulated tool results compound the cost significantly.

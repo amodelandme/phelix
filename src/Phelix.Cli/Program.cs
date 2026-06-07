@@ -37,7 +37,7 @@ while (true)
         if (completedTurn.ExitReason == TurnExitReason.TurnLimitReached)
             Console.WriteLine("[turn limit reached]");
 
-        conversationHistory = completedTurn.Messages;
+        conversationHistory = completedTurn.ContextMessages;
 
         Phelix.Core.Session.TurnRecord record = Phelix.Core.Session.TurnRecord.FromTurn(
             completedTurn,

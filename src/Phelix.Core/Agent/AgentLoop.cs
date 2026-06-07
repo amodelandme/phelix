@@ -26,6 +26,14 @@ namespace Phelix.Core.Agent;
 public class AgentLoop(IChatClient chatClient, AgentOptions options, ToolRegistry? toolRegistry = null)
 {
     /// <summary>
+    /// Maximum number of characters returned by any single tool call before the result is truncated.
+    /// </summary>
+    /// <remarks>
+    /// Keeps individual tool results from consuming a disproportionate share of the context window.
+    /// The head (80%) and tail (20%) are preserved; the middle is replaced with a truncation notice.
+    /// </remarks>
+    const int MaxToolOutputChars = 2000;
+    /// <summary>
     /// Appends <paramref name="userMessage"/> to <paramref name="conversationHistory"/>,
     /// calls the model, dispatches any tool calls, and returns the completed turn.
     /// </summary>
@@ -107,7 +115,8 @@ public class AgentLoop(IChatClient chatClient, AgentOptions options, ToolRegistr
 
                     TurnExitReason exitReason = limitReached ? TurnExitReason.TurnLimitReached : TurnExitReason.Completed;
                     UsageSummary usage = new(totalInputTokens, totalOutputTokens);
-                    return new Turn(messages, response, DateTimeOffset.UtcNow, usage, toolCallRecords, exitReason);
+                    IReadOnlyList<ChatMessage> contextMessages = BuildContextMessages(messages);
+                    return new Turn(messages, contextMessages, response, DateTimeOffset.UtcNow, usage, toolCallRecords, exitReason);
                 }
 
                 List<AIContent> toolResults = [];
@@ -130,7 +139,9 @@ public class AgentLoop(IChatClient chatClient, AgentOptions options, ToolRegistr
                                 ? new Dictionary<string, object?>(call.Arguments, StringComparer.Ordinal)
                                 : [];
 
-                            result = await tool!.ExecuteAsync(args, cancellationToken);
+                            result = TruncateToolOutput(
+                                await tool!.ExecuteAsync(args, cancellationToken),
+                                MaxToolOutputChars);
                             status = ToolCallStatus.Succeeded;
                             toolCall?.SetTag(PhelixTelemetry.Tags.Tool.Success, true);
                         }
@@ -167,5 +178,62 @@ public class AgentLoop(IChatClient chatClient, AgentOptions options, ToolRegistr
             turn?.SetStatus(ActivityStatusCode.Error, ex.Message);
             throw;
         }
+    }
+
+    /// <summary>
+    /// Caps <paramref name="result"/> at <paramref name="maxChars"/> using a head/tail split.
+    /// </summary>
+    /// <remarks>
+    /// Preserves the first 80% and last 20% of <paramref name="maxChars"/> characters,
+    /// replacing the middle with a notice that states the number of truncated characters.
+    /// Both the session log and the model receive the same truncated value.
+    /// </remarks>
+    /// <param name="result">The raw tool output string.</param>
+    /// <param name="maxChars">Maximum character length of the returned string. Must be positive.</param>
+    public static string TruncateToolOutput(string result, int maxChars)
+    {
+        if (maxChars <= 0)
+            throw new ArgumentOutOfRangeException(nameof(maxChars), "maxChars must be positive.");
+
+        if (result.Length <= maxChars)
+            return result;
+
+        int headLength = (int)(maxChars * 0.8);
+        int tailLength = maxChars - headLength;
+        int truncatedCharCount = result.Length - headLength - tailLength;
+
+        string head = result[..headLength];
+        string tail = result[^tailLength..];
+
+        return $"{head}\n... [{truncatedCharCount} chars truncated] ...\n{tail}";
+    }
+
+    /// <summary>
+    /// Strips raw tool exchange messages from <paramref name="messages"/> to produce a
+    /// compact history safe to pass as context on the next turn.
+    /// </summary>
+    /// <remarks>
+    /// Removes <see cref="ChatRole.Tool"/> messages and assistant messages composed
+    /// entirely of <see cref="FunctionCallContent"/> items. The model already synthesized
+    /// tool output into its final reply — re-sending the raw exchange wastes tokens.
+    /// </remarks>
+    static IReadOnlyList<ChatMessage> BuildContextMessages(List<ChatMessage> messages)
+    {
+        List<ChatMessage> contextMessages = new(messages.Count);
+
+        foreach (ChatMessage message in messages)
+        {
+            if (message.Role == ChatRole.Tool)
+                continue;
+
+            if (message.Role == ChatRole.Assistant &&
+                message.Contents.Count > 0 &&
+                message.Contents.All(c => c is FunctionCallContent))
+                continue;
+
+            contextMessages.Add(message);
+        }
+
+        return contextMessages;
     }
 }
