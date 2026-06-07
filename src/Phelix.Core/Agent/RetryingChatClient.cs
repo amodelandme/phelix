@@ -57,7 +57,7 @@ public sealed class RetryingChatClient(IChatClient inner, RetryPolicy policy) : 
 
         while (true)
         {
-            List<ChatResponseUpdate> buffer = [];
+            List<ChatResponseUpdate> buffer = new(capacity: 128);
             Exception? caught = null;
 
             try

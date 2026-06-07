@@ -65,10 +65,7 @@ public class AgentLoop(IChatClient chatClient, AgentOptions options, ToolRegistr
         using Activity? turn = PhelixTelemetry.Source.StartActivity(PhelixTelemetry.Spans.Turn);
         turn?.SetTag(PhelixTelemetry.Tags.Turn.ModelId, options.ModelId);
 
-        List<ChatMessage> messages = new List<ChatMessage>(conversationHistory)
-          {
-              new(ChatRole.User, userMessage)
-          };
+        List<ChatMessage> messages = [.. conversationHistory, new(ChatRole.User, userMessage)];
 
         ChatOptions chatOptions = new ChatOptions
         {
@@ -119,7 +116,7 @@ public class AgentLoop(IChatClient chatClient, AgentOptions options, ToolRegistr
                     return new Turn(messages, contextMessages, response, DateTimeOffset.UtcNow, usage, toolCallRecords, exitReason);
                 }
 
-                List<AIContent> toolResults = [];
+                List<AIContent> toolResults = new(assistantMessage.Contents.Count);
 
                 foreach (AIContent content in assistantMessage.Contents)
                 {

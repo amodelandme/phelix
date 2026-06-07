@@ -28,12 +28,13 @@ public sealed class TokenThresholdPolicy(int thresholdTokens) : ICompactionPolic
     /// <inheritdoc/>
     public bool ShouldCompact(IReadOnlyList<ChatMessage> history)
     {
-        int estimatedTokens = history.Sum(EstimateTokens);
-        return estimatedTokens >= thresholdTokens;
-    }
+        int totalChars = 0;
 
-    static int EstimateTokens(ChatMessage message) =>
-        message.Contents
-            .OfType<TextContent>()
-            .Sum(textContent => (textContent.Text?.Length ?? 0) / CharactersPerTokenEstimate);
+        foreach (ChatMessage message in history)
+            foreach (AIContent content in message.Contents)
+                if (content is TextContent { Text: { } text })
+                    totalChars += text.Length;
+
+        return (totalChars / CharactersPerTokenEstimate) >= thresholdTokens;
+    }
 }
