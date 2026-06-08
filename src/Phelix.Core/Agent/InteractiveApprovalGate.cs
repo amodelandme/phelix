@@ -38,6 +38,7 @@ public sealed class InteractiveApprovalGate(SessionMode mode, TextReader input, 
         string toolName,
         ApprovalTier tier,
         string callSummary,
+        IReadOnlyDictionary<string, object?> args,
         CancellationToken cancellationToken)
     {
         if (tier == ApprovalTier.Auto)

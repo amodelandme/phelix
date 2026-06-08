@@ -14,7 +14,7 @@ public class ApprovalGateTests
     {
         AutoApproveGate gate = new();
 
-        bool approved = await gate.RequestApprovalAsync("any_tool", tier, "summary", CancellationToken.None);
+        bool approved = await gate.RequestApprovalAsync("any_tool", tier, "summary", new Dictionary<string, object?>(), CancellationToken.None);
 
         Assert.True(approved);
     }
@@ -31,7 +31,7 @@ public class ApprovalGateTests
         StringReader input = new(string.Empty);
         InteractiveApprovalGate gate = new(mode, input, output);
 
-        bool approved = await gate.RequestApprovalAsync("read_file", ApprovalTier.Auto, "/some/path", CancellationToken.None);
+        bool approved = await gate.RequestApprovalAsync("read_file", ApprovalTier.Auto, "/some/path", new Dictionary<string, object?>(), CancellationToken.None);
 
         Assert.True(approved);
         Assert.Empty(output.ToString());
@@ -48,7 +48,7 @@ public class ApprovalGateTests
     {
         InteractiveApprovalGate gate = new(SessionMode.Default, new StringReader(response), new StringWriter());
 
-        bool approved = await gate.RequestApprovalAsync("write_file", ApprovalTier.Prompt, "/some/file.cs", CancellationToken.None);
+        bool approved = await gate.RequestApprovalAsync("write_file", ApprovalTier.Prompt, "/some/file.cs", new Dictionary<string, object?>(), CancellationToken.None);
 
         Assert.True(approved);
     }
@@ -62,7 +62,7 @@ public class ApprovalGateTests
     {
         InteractiveApprovalGate gate = new(SessionMode.Default, new StringReader(response), new StringWriter());
 
-        bool approved = await gate.RequestApprovalAsync("write_file", ApprovalTier.Prompt, "/some/file.cs", CancellationToken.None);
+        bool approved = await gate.RequestApprovalAsync("write_file", ApprovalTier.Prompt, "/some/file.cs", new Dictionary<string, object?>(), CancellationToken.None);
 
         Assert.False(approved);
     }
@@ -76,7 +76,7 @@ public class ApprovalGateTests
         StringReader input = new(string.Empty);
         InteractiveApprovalGate gate = new(SessionMode.AcceptsEdits, input, output);
 
-        bool approved = await gate.RequestApprovalAsync("write_file", ApprovalTier.Prompt, "/some/file.cs", CancellationToken.None);
+        bool approved = await gate.RequestApprovalAsync("write_file", ApprovalTier.Prompt, "/some/file.cs", new Dictionary<string, object?>(), CancellationToken.None);
 
         Assert.True(approved);
         Assert.Empty(output.ToString());
@@ -92,7 +92,7 @@ public class ApprovalGateTests
     {
         InteractiveApprovalGate gate = new(SessionMode.Default, new StringReader(response), new StringWriter());
 
-        bool approved = await gate.RequestApprovalAsync("bash", ApprovalTier.Confirm, "rm -rf /tmp/scratch", CancellationToken.None);
+        bool approved = await gate.RequestApprovalAsync("bash", ApprovalTier.Confirm, "rm -rf /tmp/scratch", new Dictionary<string, object?>(), CancellationToken.None);
 
         Assert.True(approved);
     }
@@ -106,7 +106,7 @@ public class ApprovalGateTests
     {
         InteractiveApprovalGate gate = new(SessionMode.Default, new StringReader(response), new StringWriter());
 
-        bool approved = await gate.RequestApprovalAsync("bash", ApprovalTier.Confirm, "rm -rf /tmp/scratch", CancellationToken.None);
+        bool approved = await gate.RequestApprovalAsync("bash", ApprovalTier.Confirm, "rm -rf /tmp/scratch", new Dictionary<string, object?>(), CancellationToken.None);
 
         Assert.False(approved);
     }
@@ -116,7 +116,7 @@ public class ApprovalGateTests
     {
         InteractiveApprovalGate gate = new(SessionMode.AcceptsEdits, new StringReader("y"), new StringWriter());
 
-        bool approved = await gate.RequestApprovalAsync("bash", ApprovalTier.Confirm, "dotnet build", CancellationToken.None);
+        bool approved = await gate.RequestApprovalAsync("bash", ApprovalTier.Confirm, "dotnet build", new Dictionary<string, object?>(), CancellationToken.None);
 
         Assert.False(approved);
     }
@@ -129,7 +129,7 @@ public class ApprovalGateTests
         StringWriter output = new();
         InteractiveApprovalGate gate = new(SessionMode.Default, new StringReader("n"), output);
 
-        await gate.RequestApprovalAsync("write_file", ApprovalTier.Prompt, "/src/Foo.cs", CancellationToken.None);
+        await gate.RequestApprovalAsync("write_file", ApprovalTier.Prompt, "/src/Foo.cs", new Dictionary<string, object?>(), CancellationToken.None);
 
         string printed = output.ToString();
         Assert.Contains("write_file", printed);
@@ -142,7 +142,7 @@ public class ApprovalGateTests
         StringWriter output = new();
         InteractiveApprovalGate gate = new(SessionMode.Default, new StringReader("yes"), output);
 
-        await gate.RequestApprovalAsync("bash", ApprovalTier.Confirm, "make clean", CancellationToken.None);
+        await gate.RequestApprovalAsync("bash", ApprovalTier.Confirm, "make clean", new Dictionary<string, object?>(), CancellationToken.None);
 
         Assert.Contains("yes", output.ToString());
     }
