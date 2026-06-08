@@ -54,6 +54,21 @@ Full hypothesis-driven audit against four pillars: high-performance .NET 10, con
 
 Full audit report, design decisions, and confirmed-correct inventory in `docs/audit-and-hardening-2026-06-07.md`.
 
+### ~~Rich TUI — foundation~~ ✓ done — PR #24
+Session orchestration extracted from `Phelix.Cli/Program.cs` into `PhelixSession` in
+`Phelix.Core`. `TurnCallbacks` introduced as a per-turn `readonly record struct` with
+`OnChunk`, `OnToolStarted`, and `OnToolCompleted` delegates. `TurnResult` discriminated
+union replaces throwing across the session boundary. `TurnExitReason.Error` added.
+Both `Phelix.Cli` and the upcoming `Phelix.Tui` drive the same `PhelixSession` —
+no session logic duplication. Spec and implementation in `docs/decisions/rich-tui/`.
+
+**Remaining TUI work (next branch):**
+- `TuiApprovalGate` — `IApprovalGate` via `TaskCompletionSource<bool>` + cancellation registration
+- `TuiEvent` hierarchy — events from agent callbacks and keyboard loop
+- `TuiState` — immutable record; pure `Apply(TuiState, TuiEvent)` function
+- `TuiRenderer` — `TuiState → IRenderable`; no mutable state
+- `TuiSession` — keyboard loop, `Channel<TuiEvent>`, consumer loop, Spectre.Console live display
+
 ---
 
 ## Backlog
