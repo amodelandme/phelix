@@ -15,7 +15,7 @@ using Phelix.Tui;
 namespace Phelix.Cli;
 
 /// <summary>
-/// Wires together all application dependencies and returns a ready-to-run <see cref="AgentLoop"/>.
+/// Wires together all application dependencies and returns a ready-to-run <see cref="PhelixSession"/>.
 /// </summary>
 /// <remarks>
 /// Owns OTel tracer setup, the <see cref="IChatClient"/> construction, <see cref="AgentOptions"/>,
@@ -42,15 +42,14 @@ internal static class PhelixHost
     /// <see cref="SessionMode.Default"/> (interactive approval).
     /// </param>
     /// <returns>
-    /// A named tuple containing the configured <see cref="AgentLoop"/>,
-    /// <see cref="ISessionStore"/>, <see cref="ICompactionPolicy"/>,
-    /// <see cref="ISessionSummarizer"/>, and an optional <see cref="TracerProvider"/>.
+    /// A named tuple containing the configured <see cref="PhelixSession"/>,
+    /// <see cref="ISessionStore"/>, and an optional <see cref="TracerProvider"/>.
+    /// The caller is responsible for disposing <see cref="ISessionStore"/> and
+    /// <see cref="TracerProvider"/> when the session ends.
     /// </returns>
     internal static (
-        AgentLoop AgentLoop,
+        PhelixSession Session,
         ISessionStore SessionStore,
-        ICompactionPolicy CompactionPolicy,
-        ISessionSummarizer Summarizer,
         TracerProvider? TracerProvider) Build(SessionMode mode = SessionMode.Default)
     {
         PhelixConfig config = ConfigLoader.Load();
@@ -117,7 +116,9 @@ internal static class PhelixHost
 
         AgentLoop agentLoop = new(chatClient, agentOptions, toolRegistry);
 
-        return (agentLoop, sessionStore, compactionPolicy, summarizer, tracerProvider);
+        PhelixSession session = new(agentLoop, sessionStore, compactionPolicy, summarizer);
+
+        return (session, sessionStore, tracerProvider);
     }
 
     /// <summary>
