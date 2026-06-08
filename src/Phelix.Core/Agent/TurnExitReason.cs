@@ -13,4 +13,7 @@ public enum TurnExitReason
 
     /// <summary>The turn was halted because <see cref="AgentOptions.MaxTurns"/> was reached.</summary>
     TurnLimitReached,
+
+    /// <summary>The turn ended due to an unhandled exception. History is unchanged; the error is logged.</summary>
+    Error,
 }
