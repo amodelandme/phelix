@@ -34,7 +34,11 @@ namespace Phelix.Tui;
 /// </remarks>
 /// <param name="session">The session to drive. Constructed once per session by <c>PhelixHost</c>.</param>
 /// <param name="initialState">The starting state, populated from session metadata by <c>PhelixHost</c>.</param>
-public sealed class TuiSession(PhelixSession session, TuiState initialState)
+/// <param name="channel">
+/// The event channel shared with <see cref="TuiApprovalGate"/>. Created by <c>Program.cs</c>
+/// before calling <c>PhelixHost.Build</c> so that the gate and session share the same writer.
+/// </param>
+public sealed class TuiSession(PhelixSession session, TuiState initialState, Channel<TuiEvent> channel)
 {
     /// <summary>
     /// Starts the keyboard loop, consumer loop, and Spectre.Console live display.
@@ -43,9 +47,6 @@ public sealed class TuiSession(PhelixSession session, TuiState initialState)
     /// <param name="cancellationToken">Propagates cancellation to the agent and keyboard loop.</param>
     public async Task RunAsync(CancellationToken cancellationToken = default)
     {
-        Channel<TuiEvent> channel = Channel.CreateUnbounded<TuiEvent>(
-            new UnboundedChannelOptions { SingleReader = true });
-
         Task keyboardTask = RunKeyboardLoopAsync(channel.Writer, cancellationToken);
 
         await RunConsumerLoopAsync(channel, cancellationToken);
