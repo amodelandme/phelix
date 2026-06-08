@@ -62,12 +62,38 @@ union replaces throwing across the session boundary. `TurnExitReason.Error` adde
 Both `Phelix.Cli` and the upcoming `Phelix.Tui` drive the same `PhelixSession` —
 no session logic duplication. Spec and implementation in `docs/decisions/rich-tui/`.
 
-**Remaining TUI work (next branch):**
-- `TuiApprovalGate` — `IApprovalGate` via `TaskCompletionSource<bool>` + cancellation registration
-- `TuiEvent` hierarchy — events from agent callbacks and keyboard loop
-- `TuiState` — immutable record; pure `Apply(TuiState, TuiEvent)` function
-- `TuiRenderer` — `TuiState → IRenderable`; no mutable state
-- `TuiSession` — keyboard loop, `Channel<TuiEvent>`, consumer loop, Spectre.Console live display
+### ~~Rich TUI — rendering layer~~ ✓ done (on `dev`, not yet PR'd)
+All five rendering-layer pieces are built and compiling clean. `IApprovalGate` signature
+extended with an `args` parameter so `TuiApprovalGate` can render a structured argument
+grid in the approval panel. All 116 existing tests pass. Spec in
+`docs/decisions/rich-tui-rendering/`.
+
+**What was built:**
+- `IApprovalGate` — added `IReadOnlyDictionary<string, object?> args` parameter; `AutoApproveGate` and `InteractiveApprovalGate` accept and ignore it; `AgentLoop` passes the resolved args dict
+- `TuiEvent.cs` — 7 event record types: `ChunkReceived`, `ToolStarted`, `ToolCompleted`, `ApprovalRequested`, `TurnCompleted`, `TurnFailed`, `KeyPressed`
+- `TuiState.cs` — immutable record + pure `Apply(TuiState, TuiEvent)` function covering all 7 event cases
+- `TuiApprovalGate.cs` — `IApprovalGate` via `TaskCompletionSource<bool>(RunContinuationsAsynchronously)` with `CancellationToken` registration
+- `TuiRenderer.cs` — `TuiState → IRenderable`; top bar, conversation, tool cards, spinner, approval panel, error panel, prompt input, bot bar
+- `TuiSession.cs` — keyboard loop, `Channel<TuiEvent>`, consumer loop, `Task.Run` for agent turns, `q` to quit
+
+**One remaining step before the TUI is runnable:**
+Wire `TuiSession` into an entry point. `PhelixHost` currently only builds for
+`Phelix.Cli`. Two options:
+1. Add a `--tui` flag to the existing `Phelix.Cli` entry point — `PhelixHost.Build`
+   constructs a `TuiApprovalGate` instead of `InteractiveApprovalGate` and returns a
+   `TuiState` alongside `PhelixSession`; `Program.cs` branches on the flag.
+2. A separate `Phelix.Tui` executable project with its own `Program.cs` that calls
+   `PhelixHost.Build` and drives `TuiSession.RunAsync`.
+
+Option 1 is simpler for now — one binary, one install, toggle via flag. Option 2 keeps
+the CLI untouched and is the cleaner long-term separation.
+
+**Also deferred (see spec for detail):**
+- Scroll / paging for long history
+- `d` (diff) key in approval gate — needs `WriteFileTool` to return structured before/after
+- Relative timestamp polling (timestamps drift while idle)
+- `a` (always approve) key — requires runtime `SessionMode` flip
+- `ctrl+r` (new session)
 
 ---
 

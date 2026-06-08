@@ -143,6 +143,7 @@ public class AgentLoop(IChatClient chatClient, AgentOptions options, ToolRegistr
                                 call.Name,
                                 tool!.ApprovalTier,
                                 callSummary,
+                                args,
                                 cancellationToken);
 
                             if (!approved)

@@ -28,11 +28,16 @@ public interface IApprovalGate
     /// A short human-readable description of the call (e.g. the file path or command).
     /// Displayed in the approval prompt so the user knows what they are approving.
     /// </param>
+    /// <param name="args">
+    /// The resolved arguments for the call. Text-only gates may ignore this;
+    /// the TUI gate uses it to render a structured argument grid in the approval panel.
+    /// </param>
     /// <param name="cancellationToken">Propagates cancellation from the agent loop.</param>
     /// <returns><c>true</c> if the call may proceed; <c>false</c> to deny it.</returns>
     Task<bool> RequestApprovalAsync(
         string toolName,
         ApprovalTier tier,
         string callSummary,
+        IReadOnlyDictionary<string, object?> args,
         CancellationToken cancellationToken);
 }

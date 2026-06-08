@@ -16,5 +16,6 @@ public sealed class AutoApproveGate : IApprovalGate
         string toolName,
         ApprovalTier tier,
         string callSummary,
+        IReadOnlyDictionary<string, object?> args,
         CancellationToken cancellationToken) => Task.FromResult(true);
 }
