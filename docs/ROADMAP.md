@@ -122,6 +122,33 @@ pass; zero warnings on build.
 ## Backlog
 *Good ideas that need a spec and the right moment. Not yet actionable.*
 
+### Conventions / Rules files with examples
+No mechanism for per-project behavioral anchors beyond `AGENTS.md`. Other harnesses use richer rule files with worked examples to constrain agent behavior without relying solely on system prompt tuning.
+- `~/.phelix/rules/` or per-repo `.phelix/rules.md` with named conventions and examples
+- Evaluate how Cursor, Gemini, and other harnesses handle this before designing the schema
+
+### Agent-facing exception and validation messages
+Exceptions and validation errors are written for human developers. An agent reading them wastes tokens disambiguating intent.
+- Custom exception types with structured, unambiguous messages the agent can act on directly
+- Validation errors carry the exact field, constraint violated, and suggested fix — no prose guessing required
+
+### Session log naming
+Sessions are identified only by date-time stamp, making them hard to retrieve after the fact.
+- Prompt the user for an optional session name at start; fall back to date-time if skipped
+- Name stored in the session record and used as the log filename prefix
+
+### Token / secret scrubber middleware
+Agent loops inevitably surface environment variables and API keys in tool output and bash commands. Without scrubbing, local SQLite session logs accumulate credentials.
+- Scrubber layer in the tool-result pipeline; fires before any content reaches the session store
+- Pattern-match against common secret shapes (API keys, tokens, `Bearer ...`) and blank them before write
+- Must not mutate content sent back to the model — scrubbing is a logging concern only
+
+### Dynamic tool loading
+All tool schemas are registered at startup and re-sent on every turn regardless of use. At ~160 tokens per tool, this is a fixed floor that compounds with every tool added — measured at 98% of baseline turn cost on a minimal session.
+- Replace the startup registry with a lightweight catalog (tool name + one-liner description)
+- Agent loads full schemas on demand when it decides it needs a tool
+- Requires a spec before any code is touched; architectural change with session and approval-gate implications
+
 ### Structured loop: Plan → Execute → Verify
 The agent retries from scratch on failure. The right pattern is explicit plan-before-execute.
 - Start with a system prompt change: instruct the agent to write a plan as its first action for non-trivial tasks, then execute step by step
