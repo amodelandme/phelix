@@ -17,13 +17,22 @@ YAML config at `~/.phelix/config.yaml`; named provider and model profiles; `ICon
 ## Phase Queue
 *Well-scoped items, roughly in priority order. Start a spec in `docs/decisions/` before touching code.*
 
-### CLI output formatting
-Structural output differentiation — model text, tool events, approval prompts, and bash output currently render identically in the same flat white stream. Two changes:
+### ~~CLI output formatting~~ ✓ done
+`Spectre.Console` added to `Phelix.Cli`. Raw `Console.Write` kept for the live
+token stream (zero latency impact). `AnsiConsole` used for all structural elements:
+tool start/end markers (grey dimmed), turn separators (grey rule), warnings (yellow),
+errors (red). `OnToolStarted` and `OnToolCompleted` wired on `TurnCallbacks`.
+All model-controlled strings (`Markup.Escape`d before rendering). Spec and
+implementation notes in `docs/decisions/cli-output-formatting/`.
 
-- **Spectre.Console selective markup** — add `Spectre.Console` to `Phelix.Cli`. Keep raw `Console.Write` for the live token stream (latency-sensitive). Use `AnsiConsole` for structural elements: labeled separators between turns, tool start/end markers, approval prompts, bash output in a dimmed code block.
-- **Visual zones** — each output type gets a distinct appearance. Model text: default. Tool activity: dimmed label + indented block. Bash output: bordered/dimmed code block so it never blends with model text. Approval prompts: visually accented, clearly distinct from output.
-
-`CliRenderer` is the right home for this — it already owns all terminal output from `Phelix.Cli`.
+**Upgrade path — stateful renderer (future):** When in-place spinner → checkmark
+updates or a persistent footer/status bar are needed, `CliRenderer` graduates from
+a static class to a stateful object with a `Start()` / `Stop()` lifecycle. It will
+own the terminal via `AnsiConsole.Live()` or direct ANSI cursor control, tracking
+the current content row and any in-flight tool lines. The `TurnCallbacks` delegate
+signatures stay identical — the upgrade is internal to `CliRenderer`. `Program.cs`
+will create one instance and pass it down rather than calling static methods. Do not
+build this until the static renderer is visibly insufficient — the seam is already right.
 
 ### Bash approval — command allowlist + `--accepts-commands` flag
 Two complementary changes to reduce bash approval friction without removing safety:

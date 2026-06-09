@@ -66,7 +66,12 @@ return await root.Parse(args).InvokeAsync();
 
 static async Task RunSingleTurnAsync(PhelixSession session, string userPrompt, CancellationToken ct)
 {
-    TurnCallbacks callbacks = new(OnChunk: CliRenderer.WriteChunk);
+    TurnCallbacks callbacks = new(
+        OnChunk:         CliRenderer.WriteChunk,
+        OnToolStarted:   CliRenderer.WriteToolStarted,
+        OnToolCompleted: CliRenderer.WriteToolCompleted
+    );
+
     TurnResult result = await session.RunTurnAsync(userPrompt, callbacks, ct);
 
     Console.WriteLine();
@@ -74,11 +79,13 @@ static async Task RunSingleTurnAsync(PhelixSession session, string userPrompt, C
     switch (result)
     {
         case TurnResult.Success success when success.Turn.ExitReason == TurnExitReason.TurnLimitReached:
-            Console.WriteLine("[turn limit reached]");
+            CliRenderer.WriteWarning("[turn limit reached]");
             break;
 
         case TurnResult.Failure failure:
-            Console.WriteLine($"Error: {failure.ErrorMessage}");
+            CliRenderer.WriteError(failure.ErrorMessage);
             break;
     }
+
+    CliRenderer.WriteTurnSeparator();
 }
