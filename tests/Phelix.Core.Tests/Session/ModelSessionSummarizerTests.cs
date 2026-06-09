@@ -12,7 +12,7 @@ public class ModelSessionSummarizerTests : IDisposable
 
     public ModelSessionSummarizerTests()
     {
-        _store = new SqliteSessionStore(":memory:");
+        _store = new SqliteSessionStore(new SessionContext(":memory:", null, DateTimeOffset.UtcNow));
         _fakeClient = new FakeSummarizingChatClient("This session: the model fixed a bug.");
         _summarizer = new ModelSessionSummarizer(_fakeClient, _store);
     }
@@ -45,7 +45,7 @@ public class ModelSessionSummarizerTests : IDisposable
 
         return TurnRecord.FromTurn(
             turn,
-            sessionId: sessionId,
+            context: new SessionContext(sessionId, null, DateTimeOffset.UtcNow),
             userMessage: userMessage,
             turnId: turnId,
             startedAt: DateTimeOffset.UtcNow.AddSeconds(-1)

@@ -50,7 +50,8 @@ internal static class PhelixHost
         ISessionStore SessionStore,
         TracerProvider? TracerProvider) Build(
         SessionMode sessionMode = SessionMode.Default,
-        IReadOnlySet<string>? allowedCommandPrefixes = null)
+        IReadOnlySet<string>? allowedCommandPrefixes = null,
+        string? sessionName = null)
     {
         PhelixConfig config = ConfigLoader.Load();
         ModelConfig activeModel = config.Models[config.ActiveModel];
@@ -98,7 +99,9 @@ internal static class PhelixHost
             ApprovalGate = approvalGate
         };
 
-        SqliteSessionStore sessionStore = new(SessionLogger.SessionId);
+        SessionContext sessionContext = SessionContext.Create(sessionName);
+
+        SqliteSessionStore sessionStore = new(sessionContext);
 
         ICompactionPolicy compactionPolicy =
             new TokenThresholdPolicy(agentOptions.CompactionThresholdTokens);
@@ -116,7 +119,7 @@ internal static class PhelixHost
 
         AgentLoop agentLoop = new(chatClient, agentOptions, toolRegistry);
 
-        PhelixSession session = new(agentLoop, sessionStore, compactionPolicy, summarizer);
+        PhelixSession session = new(agentLoop, sessionStore, compactionPolicy, summarizer, sessionContext);
 
         return (session, sessionStore, tracerProvider);
     }

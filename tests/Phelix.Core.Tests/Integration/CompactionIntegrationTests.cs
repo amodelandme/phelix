@@ -20,7 +20,7 @@ public class CompactionIntegrationTests : IDisposable
 
     public CompactionIntegrationTests()
     {
-        _store = new SqliteSessionStore(":memory:");
+        _store = new SqliteSessionStore(new SessionContext(":memory:", null, DateTimeOffset.UtcNow));
     }
 
     public void Dispose() => _store.Dispose();
@@ -88,7 +88,7 @@ public class CompactionIntegrationTests : IDisposable
 
         return TurnRecord.FromTurn(
             turn,
-            sessionId: sessionId,
+            context: new SessionContext(sessionId, null, DateTimeOffset.UtcNow),
             userMessage: userMessage,
             turnId: turnId,
             startedAt: DateTimeOffset.UtcNow.AddSeconds(-1)
