@@ -34,9 +34,18 @@ root.SetAction(async (ParseResult result, CancellationToken ct) =>
         ? [.. acceptsCommands.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)]
         : [];
 
+    string? sessionName = null;
+
+    if (prompt is null)
+    {
+        CliRenderer.WritePromptLabel("Session name (optional, press Enter to skip):");
+        Console.Write("> ");
+        sessionName = Console.ReadLine();
+    }
+
     (PhelixSession session,
      ISessionStore sessionStore,
-     TracerProvider? tracerProvider) = PhelixHost.Build(sessionMode, allowedCommandPrefixes);
+     TracerProvider? tracerProvider) = PhelixHost.Build(sessionMode, allowedCommandPrefixes, sessionName);
 
     using TracerProvider? otel = tracerProvider;
     using IDisposable sessionStoreDisposable = (IDisposable)sessionStore;

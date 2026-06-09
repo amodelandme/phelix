@@ -132,10 +132,14 @@ Exceptions and validation errors are written for human developers. An agent read
 - Custom exception types with structured, unambiguous messages the agent can act on directly
 - Validation errors carry the exact field, constraint violated, and suggested fix — no prose guessing required
 
-### Session log naming
-Sessions are identified only by date-time stamp, making them hard to retrieve after the fact.
-- Prompt the user for an optional session name at start; fall back to date-time if skipped
-- Name stored in the session record and used as the log filename prefix
+### ~~Session log naming~~ ✓ done
+`SessionContext` record (`SessionId`, `SessionName?`, `StartedAt`) replaces the static
+`SessionLogger.SessionId`. At startup in interactive mode, the user is prompted for an
+optional session name; single-turn invocations skip the prompt. The sanitized name is
+baked into both the `.jsonl` and `.db` filenames via `SessionContext.FileSlug`
+(`yyyy-MM-dd-<name>-<sessionId>` or `yyyy-MM-dd-<sessionId>` when unnamed) and stored
+as a nullable `session_name` column on every `turns` row. Name is immutable for the
+session lifetime. Spec and implementation in `docs/decisions/session-log-naming/`.
 
 ### Token / secret scrubber middleware
 Agent loops inevitably surface environment variables and API keys in tool output and bash commands. Without scrubbing, local SQLite session logs accumulate credentials.

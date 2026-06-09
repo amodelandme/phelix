@@ -27,7 +27,8 @@ public sealed class PhelixSession(
     AgentLoop agentLoop,
     ISessionStore sessionStore,
     ICompactionPolicy compactionPolicy,
-    ISessionSummarizer summarizer)
+    ISessionSummarizer summarizer,
+    SessionContext context)
 {
     /// <summary>
     /// The current conversation history. Updated after each successful turn and after
@@ -77,12 +78,12 @@ public sealed class PhelixSession(
 
             TurnRecord record = TurnRecord.FromTurn(
                 completedTurn,
-                sessionId: SessionLogger.SessionId,
+                context: context,
                 userMessage: userMessage,
                 turnId: turnId,
                 startedAt: startedAt);
 
-            await SessionLogger.AppendAsync(record, cancellationToken: cancellationToken);
+            await SessionLogger.AppendAsync(record, context: context, cancellationToken: cancellationToken);
             await sessionStore.AppendAsync(record, cancellationToken);
 
             ConversationHistory = completedTurn.ContextMessages;
@@ -112,7 +113,7 @@ public sealed class PhelixSession(
         if (!compactionPolicy.ShouldCompact(ConversationHistory))
             return;
 
-        string summary = await summarizer.SummarizeAsync(SessionLogger.SessionId, cancellationToken);
+        string summary = await summarizer.SummarizeAsync(context.SessionId, cancellationToken);
 
         if (string.IsNullOrEmpty(summary))
             return;
@@ -135,7 +136,8 @@ public sealed class PhelixSession(
     {
         TurnRecord failedRecord = new(
             TurnId: turnId,
-            SessionId: SessionLogger.SessionId,
+            SessionId: context.SessionId,
+            SessionName: context.SessionName,
             UserMessage: userMessage,
             FinalAssistantMessage: string.Empty,
             ModelId: string.Empty,
@@ -148,7 +150,7 @@ public sealed class PhelixSession(
 
         try
         {
-            await SessionLogger.AppendAsync(failedRecord, cancellationToken: cancellationToken);
+            await SessionLogger.AppendAsync(failedRecord, context: context, cancellationToken: cancellationToken);
             await sessionStore.AppendAsync(failedRecord, cancellationToken);
         }
         catch

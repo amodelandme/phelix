@@ -28,18 +28,19 @@ public sealed class SqliteSessionStore : ISessionStore, IDisposable
     readonly SqliteConnection _connection;
 
     /// <summary>
-    /// Opens (or creates) the session database at the path derived from <paramref name="sessionId"/>.
+    /// Opens (or creates) the session database at the path derived from <paramref name="context"/>.
     /// </summary>
-    /// <param name="sessionId">
-    /// The session UUID. Determines the database file path:
-    /// <c>~/.phelix/sessions/&lt;sessionId&gt;.db</c>.
-    /// Pass <c>:memory:</c> to run entirely in memory (test use only).
+    /// <param name="context">
+    /// The session identity. Determines the database file path:
+    /// <c>~/.phelix/sessions/&lt;fileSlug&gt;.db</c>.
+    /// Pass a <see cref="SessionContext"/> with <c>SessionId == ":memory:"</c> to run entirely
+    /// in memory (test use only).
     /// </param>
-    public SqliteSessionStore(string sessionId)
+    public SqliteSessionStore(SessionContext context)
     {
-        string connectionString = sessionId == ":memory:"
+        string connectionString = context.SessionId == ":memory:"
             ? "Data Source=:memory:"
-            : BuildConnectionString(sessionId);
+            : BuildConnectionString(context);
 
         _connection = new SqliteConnection(connectionString);
         _connection.Open();
@@ -58,17 +59,18 @@ public sealed class SqliteSessionStore : ISessionStore, IDisposable
         insertTurn.Transaction = transaction;
         insertTurn.CommandText = """
             INSERT INTO turns
-                (turn_id, session_id, user_message, final_assistant_message,
+                (turn_id, session_id, session_name, user_message, final_assistant_message,
                  model_id, started_at, completed_at, exit_reason,
                  input_tokens, output_tokens, tool_calls_json)
             VALUES
-                ($turnId, $sessionId, $userMessage, $finalAssistantMessage,
+                ($turnId, $sessionId, $sessionName, $userMessage, $finalAssistantMessage,
                  $modelId, $startedAt, $completedAt, $exitReason,
                  $inputTokens, $outputTokens, $toolCallsJson)
             """;
 
         insertTurn.Parameters.AddWithValue("$turnId", record.TurnId);
         insertTurn.Parameters.AddWithValue("$sessionId", record.SessionId);
+        insertTurn.Parameters.AddWithValue("$sessionName", (object?)record.SessionName ?? DBNull.Value);
         insertTurn.Parameters.AddWithValue("$userMessage", record.UserMessage);
         insertTurn.Parameters.AddWithValue("$finalAssistantMessage", record.FinalAssistantMessage);
         insertTurn.Parameters.AddWithValue("$modelId", record.ModelId);
@@ -119,7 +121,7 @@ public sealed class SqliteSessionStore : ISessionStore, IDisposable
     {
         await using SqliteCommand command = _connection.CreateCommand();
         command.CommandText = """
-            SELECT turn_id, session_id, user_message, final_assistant_message,
+            SELECT turn_id, session_id, session_name, user_message, final_assistant_message,
                    model_id, started_at, completed_at, exit_reason,
                    input_tokens, output_tokens, tool_calls_json
             FROM turns
@@ -135,7 +137,7 @@ public sealed class SqliteSessionStore : ISessionStore, IDisposable
 
         while (await reader.ReadAsync(cancellationToken))
         {
-            string toolCallsJson = reader.GetString(10);
+            string toolCallsJson = reader.GetString(11);
             IReadOnlyList<ToolCallRecord> toolCalls =
                 JsonSerializer.Deserialize<IReadOnlyList<ToolCallRecord>>(toolCallsJson)
                 ?? [];
@@ -143,13 +145,14 @@ public sealed class SqliteSessionStore : ISessionStore, IDisposable
             TurnRecord turn = new(
                 TurnId: reader.GetString(0),
                 SessionId: reader.GetString(1),
-                UserMessage: reader.GetString(2),
-                FinalAssistantMessage: reader.GetString(3),
-                ModelId: reader.GetString(4),
-                StartedAt: DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64(5)),
-                CompletedAt: DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64(6)),
-                ExitReason: Enum.Parse<TurnExitReason>(reader.GetString(7)),
-                Usage: new UsageSummary(reader.GetInt32(8), reader.GetInt32(9)),
+                SessionName: reader.IsDBNull(2) ? null : reader.GetString(2),
+                UserMessage: reader.GetString(3),
+                FinalAssistantMessage: reader.GetString(4),
+                ModelId: reader.GetString(5),
+                StartedAt: DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64(6)),
+                CompletedAt: DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64(7)),
+                ExitReason: Enum.Parse<TurnExitReason>(reader.GetString(8)),
+                Usage: new UsageSummary(reader.GetInt32(9), reader.GetInt32(10)),
                 ToolCalls: toolCalls
             );
 
@@ -230,7 +233,7 @@ public sealed class SqliteSessionStore : ISessionStore, IDisposable
         return sanitized.ToString().Trim();
     }
 
-    static string BuildConnectionString(string sessionId)
+    static string BuildConnectionString(SessionContext context)
     {
         string sessionDirectory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
@@ -239,7 +242,7 @@ public sealed class SqliteSessionStore : ISessionStore, IDisposable
 
         Directory.CreateDirectory(sessionDirectory);
 
-        string databasePath = Path.Combine(sessionDirectory, $"{sessionId}.db");
+        string databasePath = Path.Combine(sessionDirectory, $"{context.FileSlug}.db");
 
         return $"Data Source={databasePath}";
     }
@@ -251,6 +254,7 @@ public sealed class SqliteSessionStore : ISessionStore, IDisposable
             CREATE TABLE IF NOT EXISTS turns (
                 turn_id                  TEXT NOT NULL PRIMARY KEY,
                 session_id               TEXT NOT NULL,
+                session_name             TEXT,
                 user_message             TEXT NOT NULL,
                 final_assistant_message  TEXT NOT NULL,
                 model_id                 TEXT NOT NULL,

@@ -83,6 +83,13 @@ internal static class CliRenderer
         AnsiConsole.MarkupLine($"[red]Error: {Markup.Escape(message)}[/]");
 
     /// <summary>
+    /// Writes a dimmed label used for startup prompts such as session naming.
+    /// </summary>
+    /// <param name="label">The label text to display.</param>
+    internal static void WritePromptLabel(string label) =>
+        AnsiConsole.MarkupLine($"[grey dim]{Markup.Escape(label)}[/]");
+
+    /// <summary>
     /// Formats the argument dictionary as a compact inline string for tool event lines.
     /// Truncates individual values at 60 characters to keep lines readable.
     /// </summary>

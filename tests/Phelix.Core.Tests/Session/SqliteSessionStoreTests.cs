@@ -10,7 +10,7 @@ public class SqliteSessionStoreTests : IDisposable
 
     public SqliteSessionStoreTests()
     {
-        _store = new SqliteSessionStore(":memory:");
+        _store = new SqliteSessionStore(new SessionContext(":memory:", null, DateTimeOffset.UtcNow));
     }
 
     public void Dispose() => _store.Dispose();
@@ -39,7 +39,7 @@ public class SqliteSessionStoreTests : IDisposable
 
         return TurnRecord.FromTurn(
             turn,
-            sessionId: sessionId,
+            context: new SessionContext(sessionId, null, DateTimeOffset.UtcNow),
             userMessage: "do something",
             turnId: turnId,
             startedAt: DateTimeOffset.UtcNow.AddSeconds(-1)

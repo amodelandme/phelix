@@ -12,7 +12,7 @@ public class SearchSessionToolTests : IDisposable
 
     public SearchSessionToolTests()
     {
-        _store = new SqliteSessionStore(":memory:");
+        _store = new SqliteSessionStore(new SessionContext(":memory:", null, DateTimeOffset.UtcNow));
         _tool = new SearchSessionTool(_store);
     }
 
@@ -47,7 +47,7 @@ public class SearchSessionToolTests : IDisposable
 
         return TurnRecord.FromTurn(
             turn,
-            sessionId: "session-a",
+            context: new SessionContext("session-a", null, DateTimeOffset.UtcNow),
             userMessage: "do something",
             turnId: turnId,
             startedAt: DateTimeOffset.UtcNow.AddSeconds(-1)
