@@ -146,4 +146,82 @@ public class ApprovalGateTests
 
         Assert.Contains("yes", output.ToString());
     }
+
+    // --- InteractiveApprovalGate: bash command allowlist ---
+
+    [Theory]
+    [InlineData("dotnet build ./Phelix.sln")]
+    [InlineData("dotnet test")]
+    [InlineData("git status")]
+    [InlineData("git")]
+    public async Task InteractiveGate_ConfirmTier_BashAllowlisted_ApprovesWithoutPrompting(string command)
+    {
+        HashSet<string> allowlist = ["dotnet", "git"];
+        StringWriter output = new();
+        // Empty input — gate must not read from it
+        InteractiveApprovalGate gate = new(SessionMode.Default, new StringReader(string.Empty), output, allowlist);
+        Dictionary<string, object?> args = new() { ["command"] = command };
+
+        bool approved = await gate.RequestApprovalAsync("bash", ApprovalTier.Confirm, command, args, CancellationToken.None);
+
+        Assert.True(approved);
+        Assert.Empty(output.ToString());
+    }
+
+    [Theory]
+    [InlineData("rm -rf /tmp/scratch")]
+    [InlineData("curl https://example.com")]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task InteractiveGate_ConfirmTier_BashNotAllowlisted_StillPrompts(string command)
+    {
+        HashSet<string> allowlist = ["dotnet", "git"];
+        InteractiveApprovalGate gate = new(SessionMode.Default, new StringReader("yes"), new StringWriter(), allowlist);
+        Dictionary<string, object?> args = new() { ["command"] = command };
+
+        // The gate should fall through to PromptAsync; with "yes" input it approves
+        bool approved = await gate.RequestApprovalAsync("bash", ApprovalTier.Confirm, command, args, CancellationToken.None);
+
+        Assert.True(approved);
+    }
+
+    [Fact]
+    public async Task InteractiveGate_ConfirmTier_NonBashTool_AllowlistHasNoEffect()
+    {
+        HashSet<string> allowlist = ["dotnet"];
+        // "dotnet" as tool name, not bash — allowlist must not fire
+        InteractiveApprovalGate gate = new(SessionMode.Default, new StringReader("yes"), new StringWriter(), allowlist);
+        Dictionary<string, object?> args = new() { ["command"] = "dotnet build" };
+
+        bool approved = await gate.RequestApprovalAsync("some_other_tool", ApprovalTier.Confirm, "dotnet build", args, CancellationToken.None);
+
+        Assert.True(approved); // approved via PromptAsync("yes"), not the allowlist
+    }
+
+    [Fact]
+    public async Task InteractiveGate_ConfirmTier_AcceptsEditsMode_AllowlistStillFires()
+    {
+        HashSet<string> allowlist = ["dotnet"];
+        StringWriter output = new();
+        InteractiveApprovalGate gate = new(SessionMode.AcceptsEdits, new StringReader(string.Empty), output, allowlist);
+        Dictionary<string, object?> args = new() { ["command"] = "dotnet build" };
+
+        bool approved = await gate.RequestApprovalAsync("bash", ApprovalTier.Confirm, "dotnet build", args, CancellationToken.None);
+
+        Assert.True(approved);
+        Assert.Empty(output.ToString());
+    }
+
+    [Fact]
+    public async Task InteractiveGate_ConfirmTier_EmptyAllowlist_BehavesSameAsNoAllowlist()
+    {
+        HashSet<string> allowlist = [];
+        InteractiveApprovalGate gate = new(SessionMode.Default, new StringReader("yes"), new StringWriter(), allowlist);
+        Dictionary<string, object?> args = new() { ["command"] = "dotnet build" };
+
+        bool approved = await gate.RequestApprovalAsync("bash", ApprovalTier.Confirm, "dotnet build", args, CancellationToken.None);
+
+        // Falls through to PromptAsync; "yes" approves it
+        Assert.True(approved);
+    }
 }

@@ -22,7 +22,16 @@ namespace Phelix.Core.Agent;
 /// <param name="mode">The active session mode. Controls which tiers are auto-approved.</param>
 /// <param name="input">The reader used to receive user responses.</param>
 /// <param name="output">The writer used to display approval prompts.</param>
-public sealed class InteractiveApprovalGate(SessionMode mode, TextReader input, TextWriter output) : IApprovalGate
+/// <param name="allowedCommandPrefixes">
+/// Optional set of bash executable names that are pre-approved for the session.
+/// When a <c>bash</c> call's first token matches an entry here, the gate approves
+/// it silently instead of prompting. Ignored for all other tools and tiers.
+/// </param>
+public sealed class InteractiveApprovalGate(
+    SessionMode mode,
+    TextReader input,
+    TextWriter output,
+    IReadOnlySet<string>? allowedCommandPrefixes = null) : IApprovalGate
 {
     /// <inheritdoc/>
     /// <remarks>
@@ -32,7 +41,9 @@ public sealed class InteractiveApprovalGate(SessionMode mode, TextReader input, 
     /// <see cref="SessionMode.AcceptsEdits"/>, <see cref="ApprovalTier.Prompt"/> is also
     /// silent.
     /// <see cref="ApprovalTier.Confirm"/> calls require the user to type <c>yes</c>
-    /// in full; any other input is denied.
+    /// in full; any other input is denied — unless the tool is <c>bash</c> and the
+    /// command's first token is in <see cref="allowedCommandPrefixes"/>, in which case
+    /// it is approved silently.
     /// </remarks>
     public async Task<bool> RequestApprovalAsync(
         string toolName,
@@ -47,12 +58,32 @@ public sealed class InteractiveApprovalGate(SessionMode mode, TextReader input, 
         if (tier == ApprovalTier.Prompt && mode == SessionMode.AcceptsEdits)
             return true;
 
+        if (tier == ApprovalTier.Confirm
+            && toolName == "bash"
+            && allowedCommandPrefixes is { Count: > 0 }
+            && args.TryGetValue("command", out object? rawCommand)
+            && rawCommand is not null
+            && IsCommandAllowed(rawCommand.ToString()!, allowedCommandPrefixes))
+            return true;
+
         return tier switch
         {
             ApprovalTier.Prompt   => await PromptAsync(toolName, callSummary, requireFullYes: false, cancellationToken),
             ApprovalTier.Confirm  => await PromptAsync(toolName, callSummary, requireFullYes: true,  cancellationToken),
             _                     => true,
         };
+    }
+
+    /// <summary>
+    /// Returns <c>true</c> when <paramref name="command"/>'s first whitespace-delimited
+    /// token is present in <paramref name="allowedPrefixes"/>.
+    /// </summary>
+    static bool IsCommandAllowed(string command, IReadOnlySet<string> allowedPrefixes)
+    {
+        ReadOnlySpan<char> span = command.AsSpan().TrimStart();
+        int space = span.IndexOfAny(' ', '\t');
+        ReadOnlySpan<char> token = space < 0 ? span : span[..space];
+        return token.Length > 0 && allowedPrefixes.Contains(token.ToString());
     }
 
     /// <summary>

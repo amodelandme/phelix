@@ -48,7 +48,9 @@ internal static class PhelixHost
     internal static (
         PhelixSession Session,
         ISessionStore SessionStore,
-        TracerProvider? TracerProvider) Build(SessionMode sessionMode = SessionMode.Default)
+        TracerProvider? TracerProvider) Build(
+        SessionMode sessionMode = SessionMode.Default,
+        IReadOnlySet<string>? allowedCommandPrefixes = null)
     {
         PhelixConfig config = ConfigLoader.Load();
         ModelConfig activeModel = config.Models[config.ActiveModel];
@@ -86,7 +88,7 @@ internal static class PhelixHost
             config.SystemPrompt,
             Directory.GetCurrentDirectory());
 
-        IApprovalGate approvalGate = BuildApprovalGate(sessionMode);
+        IApprovalGate approvalGate = BuildApprovalGate(sessionMode, allowedCommandPrefixes);
 
         AgentOptions agentOptions = new()
         {
@@ -122,7 +124,7 @@ internal static class PhelixHost
     /// <summary>
     /// Builds the <see cref="IApprovalGate"/> for <paramref name="sessionMode"/>.
     /// </summary>
-    static IApprovalGate BuildApprovalGate(SessionMode sessionMode)
+    static IApprovalGate BuildApprovalGate(SessionMode sessionMode, IReadOnlySet<string>? allowedCommandPrefixes)
     {
         if (sessionMode == SessionMode.AllowAll)
         {
@@ -131,6 +133,6 @@ internal static class PhelixHost
             return new AutoApproveGate();
         }
 
-        return new InteractiveApprovalGate(sessionMode, Console.In, Console.Out);
+        return new InteractiveApprovalGate(sessionMode, Console.In, Console.Out, allowedCommandPrefixes);
     }
 }
