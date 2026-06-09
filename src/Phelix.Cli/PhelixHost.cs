@@ -1,5 +1,4 @@
 using System.ClientModel;
-using System.Threading.Channels;
 using Microsoft.Extensions.AI;
 using OpenAI;
 using OpenTelemetry;
@@ -11,7 +10,6 @@ using Phelix.Core.Context;
 using Phelix.Core.Session;
 using Phelix.Core.Telemetry;
 using Phelix.Core.Tools;
-using Phelix.Tui;
 
 namespace Phelix.Cli;
 
@@ -34,28 +32,24 @@ internal static class PhelixHost
     /// When <c>OTEL_EXPORTER_OTLP_ENDPOINT</c> is not set, <c>TracerProvider</c> is
     /// <c>null</c> and tracing is a no-op with zero overhead.
     ///
-    /// When <paramref name="mode"/> is <see cref="HostMode.Tui"/>, <c>InitialState</c> is
-    /// non-null and populated with metadata from config. When <paramref name="mode"/> is
-    /// <see cref="HostMode.Cli"/> with <see cref="SessionMode.AllowAll"/>, a warning is
-    /// printed before the REPL starts.
+    /// When <paramref name="sessionMode"/> is <see cref="SessionMode.AllowAll"/>, a warning
+    /// is printed before the REPL starts.
     /// </remarks>
-    /// <param name="mode">
-    /// Controls the runtime path and approval gate. Defaults to <see cref="HostMode.Tui"/>.
+    /// <param name="sessionMode">
+    /// Controls which tool calls require explicit user approval.
+    /// Defaults to <see cref="SessionMode.Default"/>.
     /// </param>
     /// <returns>
     /// A named tuple containing the configured <see cref="PhelixSession"/>,
-    /// <see cref="ISessionStore"/>, an optional <see cref="TracerProvider"/>, and an
-    /// optional <see cref="TuiState"/> (non-null only for <see cref="HostMode.Tui"/>).
+    /// <see cref="ISessionStore"/>, and an optional <see cref="TracerProvider"/>.
     /// The caller is responsible for disposing <see cref="ISessionStore"/> and
     /// <see cref="TracerProvider"/> when the session ends.
     /// </returns>
     internal static (
         PhelixSession Session,
         ISessionStore SessionStore,
-        TracerProvider? TracerProvider,
-        TuiState? InitialState) Build(HostMode? mode = null)
+        TracerProvider? TracerProvider) Build(SessionMode sessionMode = SessionMode.Default)
     {
-        mode ??= new HostMode.Tui(Channel.CreateUnbounded<TuiEvent>().Writer);
         PhelixConfig config = ConfigLoader.Load();
         ModelConfig activeModel = config.Models[config.ActiveModel];
         ProviderConfig provider = config.Providers[activeModel.Provider];
@@ -92,7 +86,7 @@ internal static class PhelixHost
             config.SystemPrompt,
             Directory.GetCurrentDirectory());
 
-        IApprovalGate approvalGate = BuildApprovalGate(mode);
+        IApprovalGate approvalGate = BuildApprovalGate(sessionMode);
 
         AgentOptions agentOptions = new()
         {
@@ -122,41 +116,21 @@ internal static class PhelixHost
 
         PhelixSession session = new(agentLoop, sessionStore, compactionPolicy, summarizer);
 
-        TuiState? initialState = mode is HostMode.Tui
-            ? new TuiState(
-                Phase: TuiPhase.Idle,
-                Messages: [],
-                CurrentInput: string.Empty,
-                ActiveTool: null,
-                TotalTokens: 0,
-                PendingApproval: null,
-                ErrorMessage: null,
-                TurnNumber: 0,
-                MaxTurns: agentOptions.MaxTurns,
-                SessionId: SessionLogger.SessionId,
-                ModelId: activeModel.ModelId,
-                Provider: activeModel.Provider)
-            : null;
-
-        return (session, sessionStore, tracerProvider, initialState);
+        return (session, sessionStore, tracerProvider);
     }
 
     /// <summary>
-    /// Builds the <see cref="IApprovalGate"/> for <paramref name="mode"/>.
+    /// Builds the <see cref="IApprovalGate"/> for <paramref name="sessionMode"/>.
     /// </summary>
-    static IApprovalGate BuildApprovalGate(HostMode mode)
+    static IApprovalGate BuildApprovalGate(SessionMode sessionMode)
     {
-        if (mode is HostMode.Tui tui)
-            return new TuiApprovalGate(tui.EventWriter);
-
-        if (mode is HostMode.Cli { SessionMode: SessionMode.AllowAll })
+        if (sessionMode == SessionMode.AllowAll)
         {
-            TerminalRenderer.WriteWarning(
+            CliRenderer.WriteWarning(
                 "Running in allow-all mode. All tool calls will execute without approval prompts.");
             return new AutoApproveGate();
         }
 
-        SessionMode sessionMode = mode is HostMode.Cli cli ? cli.SessionMode : SessionMode.Default;
         return new InteractiveApprovalGate(sessionMode, Console.In, Console.Out);
     }
 }

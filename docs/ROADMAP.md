@@ -17,6 +17,22 @@ YAML config at `~/.phelix/config.yaml`; named provider and model profiles; `ICon
 ## Phase Queue
 *Well-scoped items, roughly in priority order. Start a spec in `docs/decisions/` before touching code.*
 
+### CLI output formatting
+Structural output differentiation — model text, tool events, approval prompts, and bash output currently render identically in the same flat white stream. Two changes:
+
+- **Spectre.Console selective markup** — add `Spectre.Console` to `Phelix.Cli`. Keep raw `Console.Write` for the live token stream (latency-sensitive). Use `AnsiConsole` for structural elements: labeled separators between turns, tool start/end markers, approval prompts, bash output in a dimmed code block.
+- **Visual zones** — each output type gets a distinct appearance. Model text: default. Tool activity: dimmed label + indented block. Bash output: bordered/dimmed code block so it never blends with model text. Approval prompts: visually accented, clearly distinct from output.
+
+`CliRenderer` is the right home for this — it already owns all terminal output from `Phelix.Cli`.
+
+### Bash approval — command allowlist + `--accepts-commands` flag
+Two complementary changes to reduce bash approval friction without removing safety:
+
+- **`BashTool` command allowlist** — a set of known project-local, non-destructive command prefixes (`dotnet`, `git`, `ls`, `find`, `grep`, `cat`) are auto-approved at `Auto` tier; any command outside the allowlist stays at `Confirm` tier. The allowlist is a named constant in `BashTool`, modifiable by the model via a future config mechanism or directly in code. This approach is transparent: the allowlist is readable and auditable.
+- **`--accepts-commands` flag** — a startup flag analogous to `--accepts-edits`. When set, all `Confirm`-tier tool calls (currently only `bash`) are auto-approved for the session. Complements the allowlist for sessions where the developer wants full flow without friction. Requires a new `SessionMode` value or an extension to the existing `AcceptsEdits` path — spec before implementation.
+
+Both changes live in `Phelix.Core` (allowlist on `BashTool`, `SessionMode` extension) and `Phelix.Cli` (new flag).
+
 ### ~~Session schema redesign~~ ✓ done
 `SessionEntry` replaced by `TurnRecord`. Tool calls, token usage, exit reason, turn/session IDs, and start/end timestamps are now fully persisted. `bool` fields replaced with typed enums (`ToolCallStatus`, `SensorStatus`). `TurnEvent` hierarchy reserved for Phase 3 sensor results. Spec and implementation in `docs/decisions/session-schema-redesign/`.
 
@@ -68,7 +84,7 @@ extended with an `args` parameter so `TuiApprovalGate` can render a structured a
 grid in the approval panel. All 116 existing tests pass. Spec in
 `docs/decisions/rich-tui-rendering/`.
 
-### ~~Rich TUI — entry point wiring~~ ✓ done (on `dev`, not yet PR'd)
+### ~~Rich TUI — entry point wiring~~ ✓ done — PR #26
 TUI is now the default invocation. `phelix` starts the TUI; `phelix --cli` drops to the
 terminal REPL; `phelix --cli "prompt"` runs a single turn and exits. Spec and
 implementation notes in `docs/decisions/tui-entry-point/`.
@@ -83,12 +99,13 @@ implementation notes in `docs/decisions/tui-entry-point/`.
 - `Program.cs` — rewritten with preview-4 `System.CommandLine` API; TUI default, `--cli`
   opt-in; `--accepts-edits` and `--allow-all` are CLI-only flags
 
-**Still deferred:**
-- Scroll / paging for long history
-- `d` (diff) key in approval gate — needs `WriteFileTool` to return structured before/after
-- Relative timestamp polling (timestamps drift while idle)
-- `a` (always approve) key — requires runtime `SessionMode` flip
-- `ctrl+r` (new session)
+### ~~Rich TUI — removed~~ reverted by design decision
+TUI removed in favour of a polished CLI. `Phelix.Tui` project deleted in full.
+`HostMode`, `TuiSession`, `TuiRenderer`, `TuiState`, `TuiEvent`, `TuiApprovalGate`,
+and `TerminalRenderer` are gone. `PhelixHost` simplified to accept `SessionMode`
+directly; `CliRenderer` replaces the subset of `TerminalRenderer` the CLI needed.
+`phelix` is now the CLI directly — no `--cli` flag required. All 116 Core tests
+pass; zero warnings on build.
 
 ---
 

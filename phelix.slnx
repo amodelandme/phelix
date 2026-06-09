@@ -2,7 +2,6 @@
   <Folder Name="/src/">
     <Project Path="src/Phelix.Cli/Phelix.Cli.csproj" />
     <Project Path="src/Phelix.Core/Phelix.Core.csproj" />
-    <Project Path="src/Phelix.Tui/Phelix.Tui.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Phelix.Core.Tests/Phelix.Core.Tests.csproj" />
