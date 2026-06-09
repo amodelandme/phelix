@@ -2,7 +2,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Phelix.Core\Phelix.Core.csproj" />
-    <ProjectReference Include="..\Phelix.Tui\Phelix.Tui.csproj" />
   </ItemGroup>
 
   <ItemGroup>

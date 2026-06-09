@@ -79,7 +79,7 @@ If a proposed feature does not contribute to that loop, it does not ship in core
 | Distribution | `dotnet tool install -g phelix` |
 | Target OS (MVP) | Linux (Fedora; WezTerm) |
 | Target OS (future) | macOS, Windows |
-| TUI library | Spectre.Console |
+| CLI rendering | Spectre.Console (structural output only; raw stream for token chunks) |
 | Model abstraction | Microsoft.Extensions.AI (`IChatClient`) |
 | Roslyn | Microsoft.CodeAnalysis (workspace APIs) |
 | No sub-agents in core | Extensions only |
@@ -192,12 +192,7 @@ Both files share the same session UUID as their base name. The SQLite store is a
 ┌─────────────────────────────────────────────────┐
 │                  CLI Entry Point                │
 │           Phelix.Cli / phelix (command)         │
-└────────────────────┬────────────────────────────┘
-                     │
-┌────────────────────▼────────────────────────────┐
-│                  TUI Layer                      │
-│        Phelix.Tui (Spectre.Console)             │
-│   streaming output · status line · spinner      │
+│   CliRenderer · InteractiveApprovalGate · REPL  │
 └────────────────────┬────────────────────────────┘
                      │
 ┌────────────────────▼────────────────────────────┐
@@ -231,8 +226,9 @@ Both files share the same session UUID as their base name. The SQLite store is a
 phelix/
 ├── src/
 │   ├── Phelix.Cli/                  # Entry point — dotnet global tool
-│   │   ├── Program.cs               # REPL loop — reads input, calls AgentLoop, logs turn
-│   │   ├── PhelixHost.cs            # Wires IChatClient, AgentOptions, ToolRegistry
+│   │   ├── Program.cs               # REPL loop — reads input, calls PhelixSession, renders output
+│   │   ├── PhelixHost.cs            # Wires IChatClient, AgentOptions, ToolRegistry, ApprovalGate
+│   │   ├── CliRenderer.cs           # Terminal output — streaming chunks, warnings, tool events
 │   │   └── Phelix.Cli.csproj
 │   │
 │   ├── Phelix.Core/                 # All logic — no UI dependencies
@@ -245,7 +241,9 @@ phelix/
 │   │   │   ├── SessionMode.cs       # Default / AcceptsEdits / AllowAll — set at startup
 │   │   │   ├── IApprovalGate.cs     # Gate contract consulted before every tool dispatch
 │   │   │   ├── AutoApproveGate.cs   # IApprovalGate: always approves (AllowAll + tests)
-│   │   │   └── InteractiveApprovalGate.cs # IApprovalGate: prompts terminal; injectable I/O
+│   │   │   ├── InteractiveApprovalGate.cs # IApprovalGate: prompts terminal; injectable I/O
+│   │   │   ├── TurnCallbacks.cs     # Per-turn delegates: OnChunk, OnToolStarted, OnToolCompleted
+│   │   │   └── ControlCharSanitizer.cs    # Strips C0/C1 control chars from user-facing strings
 │   │   ├── Config/
 │   │   │   ├── PhelixConfig.cs      # Single config object threaded through the harness
 │   │   │   ├── ModelConfig.cs       # Per-model provider + modelId + max_turns
@@ -255,8 +253,10 @@ phelix/
 │   │   │   ├── ConfigLoader.cs      # Resolves path, validates, warns on missing keys
 │   │   │   └── ConfigException.cs   # Thrown on invalid config
 │   │   ├── Session/
+│   │   │   ├── PhelixSession.cs     # Public session driver — RunTurnAsync, compaction, logging
 │   │   │   ├── SessionLogger.cs     # Appends TurnRecords to ~/.phelix/sessions/*.jsonl
 │   │   │   ├── TurnRecord.cs        # Durable log schema for a completed turn
+│   │   │   ├── TurnResult.cs        # Discriminated union: Success / Failure
 │   │   │   ├── ToolCallRecord.cs    # Per-invocation log entry
 │   │   │   ├── ToolCallStatus.cs    # Succeeded / Failed / Denied dispatch outcome
 │   │   │   ├── UsageSummary.cs      # Aggregate token counts for a turn
@@ -271,21 +271,17 @@ phelix/
 │   │   ├── Tools/
 │   │   │   ├── ITool.cs             # Tool contract
 │   │   │   ├── ToolRegistry.cs      # Registers and dispatches tools by name
-│   │   │   ├── ReadFileTool.cs
-│   │   │   ├── WriteFileTool.cs
-│   │   │   ├── BashTool.cs
-│   │   │   ├── ListFilesTool.cs
-│   │   │   ├── SearchCodeTool.cs
-│   │   │   └── SearchSessionTool.cs # FTS5 query over stored tool outputs (post-compaction recall)
+│   │   │   ├── ReadFileTool.cs      # ApprovalTier.Auto
+│   │   │   ├── WriteFileTool.cs     # ApprovalTier.Prompt
+│   │   │   ├── BashTool.cs          # ApprovalTier.Confirm (allowlist downgrades to Auto)
+│   │   │   ├── ListFilesTool.cs     # ApprovalTier.Auto
+│   │   │   ├── SearchCodeTool.cs    # ApprovalTier.Auto
+│   │   │   └── SearchSessionTool.cs # ApprovalTier.Auto — FTS5 query over stored tool outputs
 │   │   ├── Context/
 │   │   │   └── AgentsMdLoader.cs    # Loads AGENTS.md from CWD and composes it with base system prompt
 │   │   ├── Telemetry/
 │   │   │   └── PhelixTelemetry.cs   # ActivitySource + span/tag name constants
 │   │   └── Phelix.Core.csproj
-│   │
-│   └── Phelix.Tui/                  # Spectre.Console rendering
-│       ├── TerminalRenderer.cs      # Streams model output to terminal
-│       └── Phelix.Tui.csproj
 │
 ├── tests/
 │   └── Phelix.Core.Tests/           # Unit tests — no real model, filesystem, or terminal
@@ -321,7 +317,7 @@ This is the heart of Phelix. Everything else exists to serve this loop.
                ▼
 ┌─────────────────────────────────────┐
 │     IChatClient → model call        │
-│     (streaming, renders to TUI)     │
+│     (streaming, renders to CLI)     │
 └──────────────┬──────────────────────┘
                │
     ┌──────────▼──────────┐
