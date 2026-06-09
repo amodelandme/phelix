@@ -6,30 +6,37 @@ using Phelix.Core.Session;
 
 // ─── Options & arguments ──────────────────────────────────────────────────────
 
-Option<bool> acceptsEditsFlag = new("--accepts-edits") { Description = "Auto-approve Prompt-tier tool calls." };
-Option<bool> allowAllFlag     = new("--allow-all")     { Description = "Auto-approve all tool calls." };
-Argument<string?> promptArg   = new("prompt")          { Arity = ArgumentArity.ZeroOrOne };
+Option<bool>    acceptsEditsFlag    = new("--accepts-edits")    { Description = "Auto-approve Prompt-tier tool calls." };
+Option<bool>    allowAllFlag        = new("--allow-all")        { Description = "Auto-approve all tool calls." };
+Option<string?> acceptsCommandsFlag = new("--accepts-commands") { Description = "Comma-separated bash executable names to auto-approve (e.g. dotnet,git)." };
+Argument<string?> promptArg         = new("prompt")             { Arity = ArgumentArity.ZeroOrOne };
 
 // ─── Root command ─────────────────────────────────────────────────────────────
 
 RootCommand root = new("Phelix — AI coding agent");
 root.Options.Add(acceptsEditsFlag);
 root.Options.Add(allowAllFlag);
+root.Options.Add(acceptsCommandsFlag);
 root.Arguments.Add(promptArg);
 
 root.SetAction(async (ParseResult result, CancellationToken ct) =>
 {
-    bool acceptsEdits = result.GetValue(acceptsEditsFlag);
-    bool allowAll     = result.GetValue(allowAllFlag);
-    string? prompt    = result.GetValue(promptArg);
+    bool acceptsEdits      = result.GetValue(acceptsEditsFlag);
+    bool allowAll          = result.GetValue(allowAllFlag);
+    string? acceptsCommands = result.GetValue(acceptsCommandsFlag);
+    string? prompt         = result.GetValue(promptArg);
 
     SessionMode sessionMode = allowAll     ? SessionMode.AllowAll
                             : acceptsEdits ? SessionMode.AcceptsEdits
                             : SessionMode.Default;
 
+    HashSet<string> allowedCommandPrefixes = acceptsCommands is not null
+        ? [.. acceptsCommands.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)]
+        : [];
+
     (PhelixSession session,
      ISessionStore sessionStore,
-     TracerProvider? tracerProvider) = PhelixHost.Build(sessionMode);
+     TracerProvider? tracerProvider) = PhelixHost.Build(sessionMode, allowedCommandPrefixes);
 
     using TracerProvider? otel = tracerProvider;
     using IDisposable sessionStoreDisposable = (IDisposable)sessionStore;
