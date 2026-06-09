@@ -34,13 +34,14 @@ signatures stay identical — the upgrade is internal to `CliRenderer`. `Program
 will create one instance and pass it down rather than calling static methods. Do not
 build this until the static renderer is visibly insufficient — the seam is already right.
 
-### Bash approval — command allowlist + `--accepts-commands` flag
-Two complementary changes to reduce bash approval friction without removing safety:
-
-- **`BashTool` command allowlist** — a set of known project-local, non-destructive command prefixes (`dotnet`, `git`, `ls`, `find`, `grep`, `cat`) are auto-approved at `Auto` tier; any command outside the allowlist stays at `Confirm` tier. The allowlist is a named constant in `BashTool`, modifiable by the model via a future config mechanism or directly in code. This approach is transparent: the allowlist is readable and auditable.
-- **`--accepts-commands` flag** — a startup flag analogous to `--accepts-edits`. When set, all `Confirm`-tier tool calls (currently only `bash`) are auto-approved for the session. Complements the allowlist for sessions where the developer wants full flow without friction. Requires a new `SessionMode` value or an extension to the existing `AcceptsEdits` path — spec before implementation.
-
-Both changes live in `Phelix.Core` (allowlist on `BashTool`, `SessionMode` extension) and `Phelix.Cli` (new flag).
+### ~~Bash approval — command allowlist + `--accepts-commands` flag~~ ✓ done — PR #29
+`InteractiveApprovalGate` accepts an optional set of trusted executable prefixes at
+construction time. When a `bash` call's first token matches an entry, it is silently
+approved without prompting. `--accepts-commands <dotnet,git,...>` populates the set
+at startup; omitting the flag leaves all `Confirm`-tier bash calls requiring explicit
+`yes`. The allowlist check fires before `PromptAsync` in all interactive modes;
+`AllowAll` is unaffected. Spec and implementation in
+`docs/decisions/bash-command-allowlist/`.
 
 ### ~~Session schema redesign~~ ✓ done
 `SessionEntry` replaced by `TurnRecord`. Tool calls, token usage, exit reason, turn/session IDs, and start/end timestamps are now fully persisted. `bool` fields replaced with typed enums (`ToolCallStatus`, `SensorStatus`). `TurnEvent` hierarchy reserved for Phase 3 sensor results. Spec and implementation in `docs/decisions/session-schema-redesign/`.
