@@ -25,6 +25,12 @@ public record TurnRecord(
     string SessionId,
 
     /// <summary>
+    /// User-supplied session name, sanitized. <c>null</c> when the session was unnamed.
+    /// Redundant across rows for the same session by design — each record is self-contained.
+    /// </summary>
+    string? SessionName,
+
+    /// <summary>
     /// The user's input message that triggered this turn.
     /// </summary>
     string UserMessage,
@@ -72,7 +78,7 @@ public record TurnRecord(
     /// Constructs a <see cref="TurnRecord"/> from a completed <see cref="Turn"/>.
     /// </summary>
     /// <param name="turn">The completed runtime turn to record.</param>
-    /// <param name="sessionId">The process-lifetime session UUID.</param>
+    /// <param name="context">The session identity for this run.</param>
     /// <param name="userMessage">The user input that initiated the turn.</param>
     /// <param name="turnId">A fresh UUID identifying this record in the session log.</param>
     /// <param name="startedAt">UTC timestamp from before the first model call.</param>
@@ -83,14 +89,15 @@ public record TurnRecord(
     /// </returns>
     public static TurnRecord FromTurn(
         Turn turn,
-        string sessionId,
+        SessionContext context,
         string userMessage,
         string turnId,
         DateTimeOffset startedAt)
     {
         return new TurnRecord(
             TurnId: turnId,
-            SessionId: sessionId,
+            SessionId: context.SessionId,
+            SessionName: context.SessionName,
             UserMessage: userMessage,
             FinalAssistantMessage: turn.Response.Text ?? string.Empty,
             ModelId: turn.Response.ModelId ?? string.Empty,

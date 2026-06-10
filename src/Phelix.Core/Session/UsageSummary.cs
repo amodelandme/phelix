@@ -7,7 +7,7 @@ namespace Phelix.Core.Session;
 /// A turn may involve multiple model calls (one per tool-call round plus the final response).
 /// Both counts are summed across all of those calls before being stored here.
 /// </remarks>
-public record UsageSummary(
+public readonly record struct UsageSummary(
     /// <summary>
     /// Total tokens sent to the model this turn, including all conversation history and
     /// tool results, aggregated across all inner model calls.

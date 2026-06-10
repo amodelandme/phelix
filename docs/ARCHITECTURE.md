@@ -79,7 +79,7 @@ If a proposed feature does not contribute to that loop, it does not ship in core
 | Distribution | `dotnet tool install -g phelix` |
 | Target OS (MVP) | Linux (Fedora; WezTerm) |
 | Target OS (future) | macOS, Windows |
-| TUI library | Spectre.Console |
+| CLI rendering | Spectre.Console (structural output only; raw stream for token chunks) |
 | Model abstraction | Microsoft.Extensions.AI (`IChatClient`) |
 | Roslyn | Microsoft.CodeAnalysis (workspace APIs) |
 | No sub-agents in core | Extensions only |
@@ -173,8 +173,14 @@ A session is the unit of work. A session has:
 - A turn history (messages + tool calls + sensor results)
 - A configuration snapshot (which skills were active, which model was used)
 
-Sessions are persisted as newline-delimited JSON to `~/.phelix/sessions/`.
-Each turn appends a JSON record. The file is append-only and human-readable.
+Sessions are persisted in two complementary stores:
+
+- **JSONL log** (`~/.phelix/sessions/<sessionId>.jsonl`) — append-only, human-readable, one JSON record per turn. The audit trail.
+- **SQLite database** (`~/.phelix/sessions/<sessionId>.db`) — queryable, FTS5-indexed. Backs context compaction and the `search_session` tool.
+
+Both files share the same session UUID as their base name. The SQLite store is additive — the JSONL log is unchanged.
+
+**Context compaction** fires when estimated token count of `conversationHistory` crosses `AgentOptions.CompactionThresholdTokens` (default 40,000). The full history is replaced with a single model-generated summary reconstructed from the SQLite store. The `search_session` tool lets the model query detailed tool outputs from earlier in the session after compaction.
 
 ---
 
@@ -186,12 +192,7 @@ Each turn appends a JSON record. The file is append-only and human-readable.
 ┌─────────────────────────────────────────────────┐
 │                  CLI Entry Point                │
 │           Phelix.Cli / phelix (command)         │
-└────────────────────┬────────────────────────────┘
-                     │
-┌────────────────────▼────────────────────────────┐
-│                  TUI Layer                      │
-│        Phelix.Tui (Spectre.Console)             │
-│   streaming output · status line · spinner      │
+│   CliRenderer · InteractiveApprovalGate · REPL  │
 └────────────────────┬────────────────────────────┘
                      │
 ┌────────────────────▼────────────────────────────┐
@@ -225,8 +226,9 @@ Each turn appends a JSON record. The file is append-only and human-readable.
 phelix/
 ├── src/
 │   ├── Phelix.Cli/                  # Entry point — dotnet global tool
-│   │   ├── Program.cs               # REPL loop — reads input, calls AgentLoop, logs turn
-│   │   ├── PhelixHost.cs            # Wires IChatClient, AgentOptions, ToolRegistry
+│   │   ├── Program.cs               # REPL loop — reads input, calls PhelixSession, renders output
+│   │   ├── PhelixHost.cs            # Wires IChatClient, AgentOptions, ToolRegistry, ApprovalGate
+│   │   ├── CliRenderer.cs           # Terminal output — streaming chunks, warnings, tool events
 │   │   └── Phelix.Cli.csproj
 │   │
 │   ├── Phelix.Core/                 # All logic — no UI dependencies
@@ -234,7 +236,14 @@ phelix/
 │   │   │   ├── AgentLoop.cs         # The orchestration loop
 │   │   │   ├── Turn.cs              # Runtime artifact for one turn
 │   │   │   ├── TurnExitReason.cs    # Why the loop stopped
-│   │   │   └── AgentOptions.cs      # Per-session model + system prompt config
+│   │   │   ├── AgentOptions.cs      # Per-session model + system prompt + approval gate config
+│   │   │   ├── ApprovalTier.cs      # Auto / Prompt / Confirm — declared on each ITool
+│   │   │   ├── SessionMode.cs       # Default / AcceptsEdits / AllowAll — set at startup
+│   │   │   ├── IApprovalGate.cs     # Gate contract consulted before every tool dispatch
+│   │   │   ├── AutoApproveGate.cs   # IApprovalGate: always approves (AllowAll + tests)
+│   │   │   ├── InteractiveApprovalGate.cs # IApprovalGate: prompts terminal; injectable I/O
+│   │   │   ├── TurnCallbacks.cs     # Per-turn delegates: OnChunk, OnToolStarted, OnToolCompleted
+│   │   │   └── ControlCharSanitizer.cs    # Strips C0/C1 control chars from user-facing strings
 │   │   ├── Config/
 │   │   │   ├── PhelixConfig.cs      # Single config object threaded through the harness
 │   │   │   ├── ModelConfig.cs       # Per-model provider + modelId + max_turns
@@ -244,28 +253,35 @@ phelix/
 │   │   │   ├── ConfigLoader.cs      # Resolves path, validates, warns on missing keys
 │   │   │   └── ConfigException.cs   # Thrown on invalid config
 │   │   ├── Session/
+│   │   │   ├── PhelixSession.cs     # Public session driver — RunTurnAsync, compaction, logging
 │   │   │   ├── SessionLogger.cs     # Appends TurnRecords to ~/.phelix/sessions/*.jsonl
 │   │   │   ├── TurnRecord.cs        # Durable log schema for a completed turn
+│   │   │   ├── TurnResult.cs        # Discriminated union: Success / Failure
 │   │   │   ├── ToolCallRecord.cs    # Per-invocation log entry
-│   │   │   ├── ToolCallStatus.cs    # Succeeded / Failed dispatch outcome
+│   │   │   ├── ToolCallStatus.cs    # Succeeded / Failed / Denied dispatch outcome
 │   │   │   ├── UsageSummary.cs      # Aggregate token counts for a turn
 │   │   │   ├── TurnEvent.cs         # Extension point for Phase 3 sensor results
-│   │   │   └── SensorStatus.cs      # Passed / Failed / Skipped sensor outcome
+│   │   │   ├── SensorStatus.cs      # Passed / Failed / Skipped sensor outcome
+│   │   │   ├── ISessionStore.cs     # Read/write interface over durable turn storage
+│   │   │   ├── SqliteSessionStore.cs # ISessionStore backed by SQLite + FTS5
+│   │   │   ├── ICompactionPolicy.cs # Decides whether to compact given a message list
+│   │   │   ├── TokenThresholdPolicy.cs # ICompactionPolicy: fires at N estimated tokens
+│   │   │   ├── ISessionSummarizer.cs # Produces a summary string from stored turns
+│   │   │   └── ModelSessionSummarizer.cs # ISessionSummarizer: calls the model to summarize
 │   │   ├── Tools/
 │   │   │   ├── ITool.cs             # Tool contract
 │   │   │   ├── ToolRegistry.cs      # Registers and dispatches tools by name
-│   │   │   ├── ReadFileTool.cs
-│   │   │   ├── WriteFileTool.cs
-│   │   │   ├── BashTool.cs
-│   │   │   ├── ListFilesTool.cs
-│   │   │   └── SearchCodeTool.cs
+│   │   │   ├── ReadFileTool.cs      # ApprovalTier.Auto
+│   │   │   ├── WriteFileTool.cs     # ApprovalTier.Prompt
+│   │   │   ├── BashTool.cs          # ApprovalTier.Confirm (allowlist downgrades to Auto)
+│   │   │   ├── ListFilesTool.cs     # ApprovalTier.Auto
+│   │   │   ├── SearchCodeTool.cs    # ApprovalTier.Auto
+│   │   │   └── SearchSessionTool.cs # ApprovalTier.Auto — FTS5 query over stored tool outputs
+│   │   ├── Context/
+│   │   │   └── AgentsMdLoader.cs    # Loads AGENTS.md from CWD and composes it with base system prompt
 │   │   ├── Telemetry/
 │   │   │   └── PhelixTelemetry.cs   # ActivitySource + span/tag name constants
 │   │   └── Phelix.Core.csproj
-│   │
-│   └── Phelix.Tui/                  # Spectre.Console rendering
-│       ├── TerminalRenderer.cs      # Streams model output to terminal
-│       └── Phelix.Tui.csproj
 │
 ├── tests/
 │   └── Phelix.Core.Tests/           # Unit tests — no real model, filesystem, or terminal
@@ -301,7 +317,7 @@ This is the heart of Phelix. Everything else exists to serve this loop.
                ▼
 ┌─────────────────────────────────────┐
 │     IChatClient → model call        │
-│     (streaming, renders to TUI)     │
+│     (streaming, renders to CLI)     │
 └──────────────┬──────────────────────┘
                │
     ┌──────────▼──────────┐
@@ -521,7 +537,7 @@ Goal: `PHELIX.md` and skills work end-to-end.
 
 - `PhelixMdLoader` — walk dirs, merge configs
 - `SkillLoader` — on-demand skill injection
-- `Compactor` — basic compaction when context limit approaches
+- ~~`Compactor`~~ — delivered early as part of the context compaction feature (see `docs/decisions/context-compaction/`)
 - `SearchCodeTool`, `RoslynDiagnosticsTool` (tool-callable version)
 
 ### Phase 5 — Polish + release (weeks 9–10)
@@ -543,7 +559,8 @@ Goal: `dotnet tool install -g phelix` works. README is complete.
 | `Microsoft.Extensions.AI` over Semantic Kernel | Lower abstraction level, less opinion, easier to reason about, SK builds on top of it anyway |
 | `Spectre.Console` over raw ANSI | Battle-tested, good WezTerm/Linux support, rich without being heavy |
 | Roslyn over tree-sitter | Native C# semantics, not just syntax. First-class in the .NET SDK. |
-| JSON session log over SQLite | Human-readable, append-only, no schema migrations, trivially greppable |
+| JSONL session log kept alongside SQLite | JSONL stays as the human-readable audit trail; SQLite is additive for queryability and compaction. Neither replaces the other. |
+| SQLite for session store | FTS5 full-text search over tool outputs, atomic writes, survives process restarts. One file per session — matches JSONL naming. |
 | Append-only session file | Audit trail, replayable, survives crashes without corruption |
 
 ---

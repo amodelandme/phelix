@@ -48,9 +48,11 @@ public class AgentLoop(IChatClient chatClient, AgentOptions options, ToolRegistr
     /// from this turn — pass it back as history on the next call.
     /// </param>
     /// <param name="userMessage">The raw user input for this turn.</param>
-    /// <param name="onChunk">
-    /// Optional streaming callback. Invoked with each text chunk as it arrives on the final
-    /// (non-tool-call) model response. Tool-call intermediate responses are not streamed.
+    /// <param name="callbacks">
+    /// Optional per-turn callbacks. <see cref="TurnCallbacks.OnChunk"/> receives each streamed
+    /// text fragment on the final model response. <see cref="TurnCallbacks.OnToolStarted"/> and
+    /// <see cref="TurnCallbacks.OnToolCompleted"/> fire around every tool dispatch so callers
+    /// can render live tool-call state without polling.
     /// </param>
     /// <param name="cancellationToken">Propagates cancellation to the underlying model calls.</param>
     /// <returns>
@@ -59,16 +61,13 @@ public class AgentLoop(IChatClient chatClient, AgentOptions options, ToolRegistr
     public async Task<Turn> RunTurnAsync(
         IReadOnlyList<ChatMessage> conversationHistory,
         string userMessage,
-        Func<string, Task>? onChunk = null,
+        TurnCallbacks callbacks = default,
         CancellationToken cancellationToken = default)
     {
         using Activity? turn = PhelixTelemetry.Source.StartActivity(PhelixTelemetry.Spans.Turn);
         turn?.SetTag(PhelixTelemetry.Tags.Turn.ModelId, options.ModelId);
 
-        List<ChatMessage> messages = new List<ChatMessage>(conversationHistory)
-          {
-              new(ChatRole.User, userMessage)
-          };
+        List<ChatMessage> messages = [.. conversationHistory, new(ChatRole.User, userMessage)];
 
         ChatOptions chatOptions = new ChatOptions
         {
@@ -90,7 +89,7 @@ public class AgentLoop(IChatClient chatClient, AgentOptions options, ToolRegistr
 
                 await foreach (ChatResponseUpdate update in chatClient.GetStreamingResponseAsync(messages, chatOptions, cancellationToken))
                 {
-                    if (onChunk is not null && !string.IsNullOrEmpty(update.Text))
+                    if (callbacks.OnChunk is { } onChunk && !string.IsNullOrEmpty(update.Text))
                         await onChunk(update.Text);
 
                     updates.Add(update);
@@ -119,7 +118,7 @@ public class AgentLoop(IChatClient chatClient, AgentOptions options, ToolRegistr
                     return new Turn(messages, contextMessages, response, DateTimeOffset.UtcNow, usage, toolCallRecords, exitReason);
                 }
 
-                List<AIContent> toolResults = [];
+                List<AIContent> toolResults = new(assistantMessage.Contents.Count);
 
                 foreach (AIContent content in assistantMessage.Contents)
                 {
@@ -139,11 +138,43 @@ public class AgentLoop(IChatClient chatClient, AgentOptions options, ToolRegistr
                                 ? new Dictionary<string, object?>(call.Arguments, StringComparer.Ordinal)
                                 : [];
 
-                            result = TruncateToolOutput(
-                                await tool!.ExecuteAsync(args, cancellationToken),
-                                MaxToolOutputChars);
-                            status = ToolCallStatus.Succeeded;
-                            toolCall?.SetTag(PhelixTelemetry.Tags.Tool.Success, true);
+                            string callSummary = BuildCallSummary(call.Name, args);
+                            bool approved = await options.ApprovalGate.RequestApprovalAsync(
+                                call.Name,
+                                tool!.ApprovalTier,
+                                callSummary,
+                                args,
+                                cancellationToken);
+
+                            if (!approved)
+                            {
+                                result = $"Tool call '{call.Name}' was denied by the user.";
+                                status = ToolCallStatus.Denied;
+                                toolCall?.SetTag(PhelixTelemetry.Tags.Tool.Success, false);
+                                toolCall?.SetTag(PhelixTelemetry.Tags.Tool.Error, result);
+
+                                if (callbacks.OnToolStarted is { } onDeniedStart)
+                                    await onDeniedStart(call.Name, args);
+                                if (callbacks.OnToolCompleted is { } onDeniedDone)
+                                    await onDeniedDone(call.Name, ToolCallStatus.Denied, TimeSpan.Zero);
+                            }
+                            else
+                            {
+                                if (callbacks.OnToolStarted is { } onToolStarted)
+                                    await onToolStarted(call.Name, args);
+
+                                Stopwatch toolTimer = Stopwatch.StartNew();
+                                result = TruncateToolOutput(
+                                    await tool!.ExecuteAsync(args, cancellationToken),
+                                    MaxToolOutputChars);
+                                toolTimer.Stop();
+
+                                status = ToolCallStatus.Succeeded;
+                                toolCall?.SetTag(PhelixTelemetry.Tags.Tool.Success, true);
+
+                                if (callbacks.OnToolCompleted is { } onToolCompleted)
+                                    await onToolCompleted(call.Name, ToolCallStatus.Succeeded, toolTimer.Elapsed);
+                            }
                         }
                         else
                         {
@@ -151,6 +182,11 @@ public class AgentLoop(IChatClient chatClient, AgentOptions options, ToolRegistr
                             status = ToolCallStatus.Failed;
                             toolCall?.SetTag(PhelixTelemetry.Tags.Tool.Success, false);
                             toolCall?.SetTag(PhelixTelemetry.Tags.Tool.Error, result);
+
+                            if (callbacks.OnToolStarted is { } onFailedStart)
+                                await onFailedStart(call.Name, new Dictionary<string, object?>(StringComparer.Ordinal));
+                            if (callbacks.OnToolCompleted is { } onFailedDone)
+                                await onFailedDone(call.Name, ToolCallStatus.Failed, TimeSpan.Zero);
                         }
                     }
 
@@ -206,6 +242,35 @@ public class AgentLoop(IChatClient chatClient, AgentOptions options, ToolRegistr
         string tail = result[^tailLength..];
 
         return $"{head}\n... [{truncatedCharCount} chars truncated] ...\n{tail}";
+    }
+
+    /// <summary>
+    /// Produces a short human-readable description of a tool call for use in approval prompts.
+    /// </summary>
+    /// <remarks>
+    /// Extracts the most meaningful single argument from <paramref name="args"/> to give the
+    /// user a concrete sense of what the call will do. For file tools this is the path; for
+    /// bash it is the command; for everything else it is the first argument value available.
+    /// Falls back to the tool name alone when no arguments are present.
+    /// </remarks>
+    static string BuildCallSummary(string toolName, IReadOnlyDictionary<string, object?> args)
+    {
+        if (args.TryGetValue("path", out object? path) && path is not null)
+            return path.ToString()!;
+
+        if (args.TryGetValue("command", out object? command) && command is not null)
+            return command.ToString()!;
+
+        if (args.TryGetValue("query", out object? query) && query is not null)
+            return query.ToString()!;
+
+        foreach ((string _, object? value) in args)
+        {
+            if (value is not null)
+                return value.ToString()!;
+        }
+
+        return toolName;
     }
 
     /// <summary>

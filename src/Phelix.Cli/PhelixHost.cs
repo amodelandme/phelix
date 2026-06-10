@@ -6,33 +6,52 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Phelix.Core.Agent;
 using Phelix.Core.Config;
+using Phelix.Core.Context;
+using Phelix.Core.Session;
 using Phelix.Core.Telemetry;
 using Phelix.Core.Tools;
 
 namespace Phelix.Cli;
 
 /// <summary>
-/// Wires together all application dependencies and returns a ready-to-run <see cref="AgentLoop"/>.
+/// Wires together all application dependencies and returns a ready-to-run <see cref="PhelixSession"/>.
 /// </summary>
 /// <remarks>
 /// Owns OTel tracer setup, the <see cref="IChatClient"/> construction, <see cref="AgentOptions"/>,
 /// and <see cref="ToolRegistry"/> population. <c>Program.cs</c> calls <see cref="Build"/> and
-/// receives exactly what it needs to run the REPL — nothing else lives here.
+/// receives exactly what it needs — nothing else lives here.
 /// </remarks>
 internal static class PhelixHost
 {
     /// <summary>
-    /// Constructs and returns the <see cref="AgentLoop"/> and an optional <see cref="TracerProvider"/>.
+    /// Constructs and returns all application components needed to run the session.
     /// </summary>
     /// <remarks>
-    /// The caller is responsible for disposing <paramref name="tracerProvider"/> when the session ends.
-    /// When <c>OTEL_EXPORTER_OTLP_ENDPOINT</c> is not set, <paramref name="tracerProvider"/> is <c>null</c>
-    /// and tracing is a no-op with zero overhead.
+    /// The caller is responsible for disposing <c>SessionStore</c> and
+    /// <paramref name="tracerProvider"/> (via the returned tuple) when the session ends.
+    /// When <c>OTEL_EXPORTER_OTLP_ENDPOINT</c> is not set, <c>TracerProvider</c> is
+    /// <c>null</c> and tracing is a no-op with zero overhead.
+    ///
+    /// When <paramref name="sessionMode"/> is <see cref="SessionMode.AllowAll"/>, a warning
+    /// is printed before the REPL starts.
     /// </remarks>
+    /// <param name="sessionMode">
+    /// Controls which tool calls require explicit user approval.
+    /// Defaults to <see cref="SessionMode.Default"/>.
+    /// </param>
     /// <returns>
-    /// A tuple of the configured <see cref="AgentLoop"/> and an optional <see cref="TracerProvider"/>.
+    /// A named tuple containing the configured <see cref="PhelixSession"/>,
+    /// <see cref="ISessionStore"/>, and an optional <see cref="TracerProvider"/>.
+    /// The caller is responsible for disposing <see cref="ISessionStore"/> and
+    /// <see cref="TracerProvider"/> when the session ends.
     /// </returns>
-    internal static (AgentLoop AgentLoop, TracerProvider? TracerProvider) Build()
+    internal static (
+        PhelixSession Session,
+        ISessionStore SessionStore,
+        TracerProvider? TracerProvider) Build(
+        SessionMode sessionMode = SessionMode.Default,
+        IReadOnlySet<string>? allowedCommandPrefixes = null,
+        string? sessionName = null)
     {
         PhelixConfig config = ConfigLoader.Load();
         ModelConfig activeModel = config.Models[config.ActiveModel];
@@ -56,19 +75,39 @@ internal static class PhelixHost
             new OpenAIClientOptions { Endpoint = new Uri(provider.BaseUrl) }
         );
 
+        RetryPolicy retryPolicy = ConfigLoader.ResolveRetryPolicy(config, activeModel);
+
         // Potential prompt injection vector if ModelId is user-controlled — in production,
         // validate against an allowlist or use separate credentials per model.
         IChatClient chatClient = new ChatClientBuilder(
                 openAiClient.GetChatClient(activeModel.ModelId).AsIChatClient())
+            .Use(inner => new RetryingChatClient(inner, retryPolicy))
             .UseOpenTelemetry(loggerFactory: null, sourceName: PhelixTelemetry.SourceName)
             .Build();
+
+        string systemPrompt = AgentsMdLoader.Load(
+            config.SystemPrompt,
+            Directory.GetCurrentDirectory());
+
+        IApprovalGate approvalGate = BuildApprovalGate(sessionMode, allowedCommandPrefixes);
 
         AgentOptions agentOptions = new()
         {
             ModelId = activeModel.ModelId,
-            SystemPrompt = config.SystemPrompt,
-            MaxTurns = activeModel.MaxTurns
+            SystemPrompt = systemPrompt,
+            MaxTurns = activeModel.MaxTurns,
+            ApprovalGate = approvalGate
         };
+
+        SessionContext sessionContext = SessionContext.Create(sessionName);
+
+        SqliteSessionStore sessionStore = new(sessionContext);
+
+        ICompactionPolicy compactionPolicy =
+            new TokenThresholdPolicy(agentOptions.CompactionThresholdTokens);
+
+        ISessionSummarizer summarizer =
+            new ModelSessionSummarizer(chatClient, sessionStore);
 
         ToolRegistry toolRegistry = new();
         toolRegistry.Register(new ReadFileTool());
@@ -76,9 +115,27 @@ internal static class PhelixHost
         toolRegistry.Register(new BashTool());
         toolRegistry.Register(new ListFilesTool());
         toolRegistry.Register(new SearchCodeTool());
+        toolRegistry.Register(new SearchSessionTool(sessionStore));
 
         AgentLoop agentLoop = new(chatClient, agentOptions, toolRegistry);
 
-        return (agentLoop, tracerProvider);
+        PhelixSession session = new(agentLoop, sessionStore, compactionPolicy, summarizer, sessionContext);
+
+        return (session, sessionStore, tracerProvider);
+    }
+
+    /// <summary>
+    /// Builds the <see cref="IApprovalGate"/> for <paramref name="sessionMode"/>.
+    /// </summary>
+    static IApprovalGate BuildApprovalGate(SessionMode sessionMode, IReadOnlySet<string>? allowedCommandPrefixes)
+    {
+        if (sessionMode == SessionMode.AllowAll)
+        {
+            CliRenderer.WriteWarning(
+                "Running in allow-all mode. All tool calls will execute without approval prompts.");
+            return new AutoApproveGate();
+        }
+
+        return new InteractiveApprovalGate(sessionMode, Console.In, Console.Out, allowedCommandPrefixes);
     }
 }

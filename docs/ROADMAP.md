@@ -17,6 +17,32 @@ YAML config at `~/.phelix/config.yaml`; named provider and model profiles; `ICon
 ## Phase Queue
 *Well-scoped items, roughly in priority order. Start a spec in `docs/decisions/` before touching code.*
 
+### ~~CLI output formatting~~ ✓ done
+`Spectre.Console` added to `Phelix.Cli`. Raw `Console.Write` kept for the live
+token stream (zero latency impact). `AnsiConsole` used for all structural elements:
+tool start/end markers (grey dimmed), turn separators (grey rule), warnings (yellow),
+errors (red). `OnToolStarted` and `OnToolCompleted` wired on `TurnCallbacks`.
+All model-controlled strings (`Markup.Escape`d before rendering). Spec and
+implementation notes in `docs/decisions/cli-output-formatting/`.
+
+**Upgrade path — stateful renderer (future):** When in-place spinner → checkmark
+updates or a persistent footer/status bar are needed, `CliRenderer` graduates from
+a static class to a stateful object with a `Start()` / `Stop()` lifecycle. It will
+own the terminal via `AnsiConsole.Live()` or direct ANSI cursor control, tracking
+the current content row and any in-flight tool lines. The `TurnCallbacks` delegate
+signatures stay identical — the upgrade is internal to `CliRenderer`. `Program.cs`
+will create one instance and pass it down rather than calling static methods. Do not
+build this until the static renderer is visibly insufficient — the seam is already right.
+
+### ~~Bash approval — command allowlist + `--accepts-commands` flag~~ ✓ done — PR #29
+`InteractiveApprovalGate` accepts an optional set of trusted executable prefixes at
+construction time. When a `bash` call's first token matches an entry, it is silently
+approved without prompting. `--accepts-commands <dotnet,git,...>` populates the set
+at startup; omitting the flag leaves all `Confirm`-tier bash calls requiring explicit
+`yes`. The allowlist check fires before `PromptAsync` in all interactive modes;
+`AllowAll` is unaffected. Spec and implementation in
+`docs/decisions/bash-command-allowlist/`.
+
 ### ~~Session schema redesign~~ ✓ done
 `SessionEntry` replaced by `TurnRecord`. Tool calls, token usage, exit reason, turn/session IDs, and start/end timestamps are now fully persisted. `bool` fields replaced with typed enums (`ToolCallStatus`, `SensorStatus`). `TurnEvent` hierarchy reserved for Phase 3 sensor results. Spec and implementation in `docs/decisions/session-schema-redesign/`.
 
@@ -29,38 +55,103 @@ YAML config at `~/.phelix/config.yaml`; named provider and model profiles; `ICon
 ### ~~Tool output truncation~~ ✓ done
 `TruncateToolOutput` helper on `AgentLoop` caps every tool result at 2,000 characters using an 80/20 head/tail split before the result reaches the model or the session log. `list_files` also returns relative paths (PR #16). The ephemeral tool pattern (`ContextMessages` on `Turn`) strips raw tool exchange messages from history after each turn, preventing prior-turn tool output from compounding across the context window. Spec and implementation in `docs/decisions/tool-output-truncation/`.
 
-### Context compaction
-`conversationHistory` is an unbounded list — every turn sends the full history to the model. Accumulated tool results compound the cost significantly.
-- Detect when history approaches a threshold (half the context window)
-- Summarize older turns into a single condensed message; discard the raw turns
+### ~~Context compaction + session continuity~~ ✓ done
+`conversationHistory` compacts when estimated token count crosses `CompactionThresholdTokens` (default 40,000). Every turn is persisted to SQLite in real time. On compaction, history is replaced with a model-generated summary reconstructed from SQLite. The `search_session` tool lets the model query FTS5-indexed tool outputs from earlier in the session on demand. Spec and implementation in `docs/decisions/context-compaction/`.
 
-### Session continuity after compaction
-When the context window compacts, the agent loses everything — what it was doing, what it decided, what tools it called. This is a separate problem from compaction itself.
-- Persist session events (file edits, tool calls, errors, decisions) to SQLite in real time via `SessionLogger` — the schema is already in place
-- On session start (or post-compaction resume), inject a compact markdown summary (~300 tokens) reconstructed from the session DB rather than replaying raw history
-- Index large tool outputs to SQLite FTS5 (`Microsoft.Data.Sqlite`) instead of keeping them in `conversationHistory`; return a pointer to the agent and let it query on demand via a `search_session` tool
-- Reference: context-mode (https://github.com/mksglu/context-mode) — TypeScript/Node.js MCP server that proved this pattern at scale (98% token reduction, 16K stars). Architecture is fully replicable in native C#; no dependency needed.
+### ~~Retry / circuit breaker~~ ✓ done
+`RetryingChatClient` middleware in the `ChatClientBuilder` pipeline. Exponential backoff with ±20% jitter; retries on 429, 5xx, `TaskCanceledException`, `TimeoutException`, `IOException`. Streaming responses are buffered per attempt — no partial output on retry. Per-model `RetryPolicy` override with global fallback in config. Spec and implementation in `docs/decisions/retry-circuit-breaker/`.
 
-### Retry / circuit breaker
-A 429 or transient network error kills the session.
-- Exponential backoff wired into `ChatClientBuilder` middleware
-- Write spec in `docs/decisions/` first
+### ~~AGENTS.md per-repo loading~~ ✓ done — PR #21
+`AgentsMdLoader` reads `AGENTS.md` from the current working directory on startup and composes it with the base system prompt using XML-tagged sections. File absence is silent; read failures warn to stderr. Spec and implementation in `docs/decisions/agents-md-loading/`.
 
-### AGENTS.md per-repo loading
-Support loading a per-project `AGENTS.md` from the working directory on startup and injecting it into the system prompt.
-- Small feature; no new infrastructure needed
+### ~~Tiered approval friction~~ ✓ done — PR #22
+`ApprovalTier` on `ITool` (`Auto` / `Prompt` / `Confirm`) declares per-tool approval requirements. `IApprovalGate` is consulted by `AgentLoop` before every dispatch. `SessionMode` (`Default` / `AcceptsEdits` / `AllowAll`) controls gate behaviour; `--accepts-edits` and `--allow-all` flags set the mode at startup. Denied calls are recorded as `ToolCallStatus.Denied`. Spec and implementation in `docs/decisions/tiered-approval-friction/`.
 
-### Tiered approval friction
-All tool calls currently auto-execute.
-- Auto-approve low-risk reads (`ReadFileTool`, `ListFilesTool`)
-- Prompt on writes (`WriteFileTool`)
-- Require explicit confirmation for destructive or network-touching `BashTool` calls
-- Configurable per user
+### ~~Codebase audit & hardening~~ ✓ done — PR #23
+Full hypothesis-driven audit against four pillars: high-performance .NET 10, context engineering, vendor independence, and extensibility. Seven findings resolved:
+
+- **C-1 (critical):** Path containment in `ReadFileTool`, `WriteFileTool`, and `BashTool` replaced `StartsWith` with `Path.GetRelativePath`-based `IsWithinRoot` guard — closes directory-boundary false positive where sibling paths (e.g. `/root-evil`) passed a `/root` prefix check.
+- **ANSI spoofing hardening:** `ControlCharSanitizer` added; wired into `InteractiveApprovalGate` so model-controlled tool names and call summaries have all C0/C1 control characters and ANSI escape sequences replaced with visible literals before being printed for user approval.
+- **W-2:** `SqliteCommand` disposal fixed across all four command sites in `SqliteSessionStore`; `tool_outputs` insert command now created once per `AppendAsync` call with parameters rebound per iteration rather than reallocated.
+- **O-1:** `AgentLoop` message list uses C# 14 spread `[.. conversationHistory, msg]` for exact-capacity allocation; `toolResults` preallocated from `Contents.Count`.
+- **O-2:** `TokenThresholdPolicy.ShouldCompact` replaced double LINQ chain with zero-allocation `foreach` loops.
+- **O-3:** Streaming retry buffer in `RetryingChatClient` preallocated at capacity 128.
+- **O-4:** `UsageSummary` promoted from `record class` to `readonly record struct`.
+
+Full audit report, design decisions, and confirmed-correct inventory in `docs/audit-and-hardening-2026-06-07.md`.
+
+### ~~Rich TUI — foundation~~ ✓ done — PR #24
+Session orchestration extracted from `Phelix.Cli/Program.cs` into `PhelixSession` in
+`Phelix.Core`. `TurnCallbacks` introduced as a per-turn `readonly record struct` with
+`OnChunk`, `OnToolStarted`, and `OnToolCompleted` delegates. `TurnResult` discriminated
+union replaces throwing across the session boundary. `TurnExitReason.Error` added.
+Both `Phelix.Cli` and the upcoming `Phelix.Tui` drive the same `PhelixSession` —
+no session logic duplication. Spec and implementation in `docs/decisions/rich-tui/`.
+
+### ~~Rich TUI — rendering layer~~ ✓ done — PR #25
+All five rendering-layer pieces are built and compiling clean. `IApprovalGate` signature
+extended with an `args` parameter so `TuiApprovalGate` can render a structured argument
+grid in the approval panel. All 116 existing tests pass. Spec in
+`docs/decisions/rich-tui-rendering/`.
+
+### ~~Rich TUI — entry point wiring~~ ✓ done — PR #26
+TUI is now the default invocation. `phelix` starts the TUI; `phelix --cli` drops to the
+terminal REPL; `phelix --cli "prompt"` runs a single turn and exits. Spec and
+implementation notes in `docs/decisions/tui-entry-point/`.
+
+**What was built:**
+- `HostMode.cs` — discriminated union (`HostMode.Tui` / `HostMode.Cli`) replaces the
+  `SessionMode` parameter on `PhelixHost.Build`
+- `PhelixHost.cs` — `BuildApprovalGate` switches on `HostMode` once; `Build` returns
+  `TuiState? InitialState` (non-null for `HostMode.Tui`) populated from config metadata
+- `TuiSession.cs` — constructor now accepts `Channel<TuiEvent>` created by `Program.cs`,
+  resolving the gate/session sequencing problem without coupling either to the other
+- `Program.cs` — rewritten with preview-4 `System.CommandLine` API; TUI default, `--cli`
+  opt-in; `--accepts-edits` and `--allow-all` are CLI-only flags
+
+### ~~Rich TUI — removed~~ reverted by design decision
+TUI removed in favour of a polished CLI. `Phelix.Tui` project deleted in full.
+`HostMode`, `TuiSession`, `TuiRenderer`, `TuiState`, `TuiEvent`, `TuiApprovalGate`,
+and `TerminalRenderer` are gone. `PhelixHost` simplified to accept `SessionMode`
+directly; `CliRenderer` replaces the subset of `TerminalRenderer` the CLI needed.
+`phelix` is now the CLI directly — no `--cli` flag required. All 116 Core tests
+pass; zero warnings on build.
 
 ---
 
 ## Backlog
 *Good ideas that need a spec and the right moment. Not yet actionable.*
+
+### Conventions / Rules files with examples
+No mechanism for per-project behavioral anchors beyond `AGENTS.md`. Other harnesses use richer rule files with worked examples to constrain agent behavior without relying solely on system prompt tuning.
+- `~/.phelix/rules/` or per-repo `.phelix/rules.md` with named conventions and examples
+- Evaluate how Cursor, Gemini, and other harnesses handle this before designing the schema
+
+### Agent-facing exception and validation messages
+Exceptions and validation errors are written for human developers. An agent reading them wastes tokens disambiguating intent.
+- Custom exception types with structured, unambiguous messages the agent can act on directly
+- Validation errors carry the exact field, constraint violated, and suggested fix — no prose guessing required
+
+### ~~Session log naming~~ ✓ done
+`SessionContext` record (`SessionId`, `SessionName?`, `StartedAt`) replaces the static
+`SessionLogger.SessionId`. At startup in interactive mode, the user is prompted for an
+optional session name; single-turn invocations skip the prompt. The sanitized name is
+baked into both the `.jsonl` and `.db` filenames via `SessionContext.FileSlug`
+(`yyyy-MM-dd-<name>-<sessionId>` or `yyyy-MM-dd-<sessionId>` when unnamed) and stored
+as a nullable `session_name` column on every `turns` row. Name is immutable for the
+session lifetime. Spec and implementation in `docs/decisions/session-log-naming/`.
+
+### Token / secret scrubber middleware
+Agent loops inevitably surface environment variables and API keys in tool output and bash commands. Without scrubbing, local SQLite session logs accumulate credentials.
+- Scrubber layer in the tool-result pipeline; fires before any content reaches the session store
+- Pattern-match against common secret shapes (API keys, tokens, `Bearer ...`) and blank them before write
+- Must not mutate content sent back to the model — scrubbing is a logging concern only
+
+### Dynamic tool loading
+All tool schemas are registered at startup and re-sent on every turn regardless of use. At ~160 tokens per tool, this is a fixed floor that compounds with every tool added — measured at 98% of baseline turn cost on a minimal session.
+- Replace the startup registry with a lightweight catalog (tool name + one-liner description)
+- Agent loads full schemas on demand when it decides it needs a tool
+- Requires a spec before any code is touched; architectural change with session and approval-gate implications
 
 ### Structured loop: Plan → Execute → Verify
 The agent retries from scratch on failure. The right pattern is explicit plan-before-execute.

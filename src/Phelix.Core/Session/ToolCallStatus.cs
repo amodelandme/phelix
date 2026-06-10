@@ -20,5 +20,11 @@ public enum ToolCallStatus
     /// No registered tool matched the requested name. <c>ExecuteAsync</c> was never called
     /// and the model received an error notice instead of a tool result.
     /// </summary>
-    Failed
+    Failed,
+
+    /// <summary>
+    /// The tool was found and valid, but the user declined the approval prompt.
+    /// <c>ExecuteAsync</c> was never called. The model received a denial notice.
+    /// </summary>
+    Denied
 }

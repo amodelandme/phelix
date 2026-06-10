@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Microsoft.Extensions.AI;
+using Phelix.Core.Agent;
 
 namespace Phelix.Core.Tools;
 
@@ -24,6 +25,9 @@ public class BashTool : ITool
 
     /// <inheritdoc/>
     public string Description => "Runs a bash command and returns its exit code and combined stdout/stderr output. The working directory must be within the allowed root. Commands run as the current user with no sandboxing.";
+
+    /// <inheritdoc/>
+    public ApprovalTier ApprovalTier => ApprovalTier.Confirm;
 
     /// <param name="rootDirectory">
     /// Absolute path of the default working directory and confinement root.
@@ -65,7 +69,7 @@ public class BashTool : ITool
                 return $"Error: could not resolve working_directory '{requestedDir}': {ex.Message}";
             }
 
-            if (!absoluteDir.StartsWith(RootDirectory, StringComparison.Ordinal))
+            if (!ReadFileTool.IsWithinRoot(RootDirectory, absoluteDir))
                 return $"Error: working_directory '{absoluteDir}' is outside the allowed root '{RootDirectory}'.";
 
             if (!Directory.Exists(absoluteDir))

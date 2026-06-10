@@ -77,6 +77,12 @@ This project is a learning environment as much as a build environment. The devel
 - Identifiers are sentence fragments. A reader should understand intent from the name alone.
 - Include XML Documentation for use by agents reading/scanning the codebase. Make it easy for them to understand.
 
+## Branch strategy
+
+- Active development happens on `dev`. Feature branches cut from `dev` and merge back into `dev`.
+- `main` is updated only at major milestones — never commit directly to `main`.
+- Branch hierarchy: `feature/*` (or `fix/*`, `chore/*`, `docs/*`) → `dev` → `main`
+
 ## Workflow
 
 1. Read the relevant section of `ARCHITECTURE.md`

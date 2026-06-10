@@ -9,6 +9,8 @@ namespace Phelix.Core.Config;
 /// </remarks>
 public record ModelConfig
 {
+    public const int DefaultMaxTurns = 100;
+
     /// <summary>
     /// Key into <see cref="PhelixConfig.Providers"/> identifying which provider serves
     /// this model. Must match an entry in <c>Providers</c> or config validation throws.
@@ -23,7 +25,13 @@ public record ModelConfig
 
     /// <summary>
     /// Maximum number of tool-call rounds the agent loop allows before halting with
-    /// <c>TurnExitReason.TurnLimitReached</c>. Defaults to 5 when not specified in config.
+    /// <c>TurnExitReason.TurnLimitReached</c>. Defaults to <see cref="DefaultMaxTurns"/> when not specified in config.
     /// </summary>
-    public int MaxTurns { get; init; } = 5;
+    public int MaxTurns { get; init; } = DefaultMaxTurns;
+
+    /// <summary>
+    /// Per-model retry policy override. When <c>null</c>, the global <see cref="PhelixConfig.Retry"/>
+    /// is used; if that is also <c>null</c>, <see cref="RetryPolicy.Default"/> applies.
+    /// </summary>
+    public RetryPolicy? Retry { get; init; }
 }

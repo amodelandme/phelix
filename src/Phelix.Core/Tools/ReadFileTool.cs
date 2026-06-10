@@ -1,4 +1,5 @@
 using Microsoft.Extensions.AI;
+using Phelix.Core.Agent;
 
 namespace Phelix.Core.Tools;
 
@@ -19,6 +20,9 @@ public class ReadFileTool : ITool
 
     /// <inheritdoc/>
     public string Description => "Reads the contents of a file at the given path. The path must be within the allowed root directory.";
+
+    /// <inheritdoc/>
+    public ApprovalTier ApprovalTier => ApprovalTier.Auto;
 
     /// <param name="rootDirectory">
     /// Absolute path of the directory that bounds all reads.
@@ -52,7 +56,7 @@ public class ReadFileTool : ITool
             return $"Error: could not resolve path '{requestedPath}': {ex.Message}";
         }
 
-        if (!absolutePath.StartsWith(RootDirectory, StringComparison.Ordinal))
+        if (!IsWithinRoot(RootDirectory, absolutePath))
             return $"Error: path '{absolutePath}' is outside the allowed root '{RootDirectory}'.";
 
         if (!File.Exists(absolutePath))
@@ -75,4 +79,10 @@ public class ReadFileTool : ITool
                 ExecuteAsync(new Dictionary<string, object?> { ["path"] = path }, ct),
             Name,
             Description);
+
+    internal static bool IsWithinRoot(string root, string candidate)
+    {
+        string relative = Path.GetRelativePath(root, candidate);
+        return !relative.StartsWith("..") && !Path.IsPathRooted(relative);
+    }
 }

@@ -14,10 +14,15 @@ improvise branching names, commit formats, or merge strategy.
 - `docs/` — documentation only
 
 **Rules:**
-- Always cut from `main`
+- Always cut from `dev`
 - Slug is kebab-case, short, descriptive (e.g. `feature/otel-tracing`, `fix/tool-registry-duplicate`)
 - One concern per branch — do not combine unrelated changes
 - Delete branch after merge (local and remote)
+
+**Branch hierarchy:**
+- `feature/*`, `fix/*`, `chore/*`, `docs/*` → merge into `dev`
+- `dev` → merge into `main` at major milestones only
+- Never commit directly to `main`
 
 ---
 
@@ -68,7 +73,7 @@ refactor(tool-registry): extract ITool dispatch to helper
 - [ ] builds clean
 - [ ] no uncommitted changes on the branch
 - [ ] implementation-notes.md written (if feature branch)
-- [ ] branch targets main
+- [ ] branch targets `dev` (not `main`)
 
 ## Refs
 <!-- related issues, decisions docs, or spec files -->
@@ -82,7 +87,7 @@ Before merging, verify and flag if any of these fail:
 
 1. `dotnet build <solution>` passes with zero errors and zero warnings
 2. No uncommitted or unstaged changes on the branch
-3. Branch targets `main`, not another feature branch
+3. Branch targets `dev`, not `main` or another feature branch
 4. If a feature branch — `docs/decisions/<feature>/implementation-notes.md` exists
 5. PR title follows conventional commit format
 
@@ -99,5 +104,5 @@ After a successful merge:
 3. Confirm deletion of both
 
 `-D` (force) is always required after a squash merge. Squash merge produces a
-new commit SHA on main — git does not recognize the local branch as merged and
+new commit SHA on `dev` — git does not recognize the local branch as merged and
 will refuse `-d`.

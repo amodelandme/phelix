@@ -1,4 +1,5 @@
 using Microsoft.Extensions.AI;
+using Phelix.Core.Agent;
 
 namespace Phelix.Core.Tools;
 
@@ -20,6 +21,9 @@ public class WriteFileTool : ITool
 
     /// <inheritdoc/>
     public string Description => "Writes text content to a file at the given path, creating the file and any missing directories. Overwrites the file if it already exists. The path must be within the allowed root directory.";
+
+    /// <inheritdoc/>
+    public ApprovalTier ApprovalTier => ApprovalTier.Prompt;
 
     /// <param name="rootDirectory">
     /// Absolute path of the directory that bounds all writes.
@@ -54,7 +58,7 @@ public class WriteFileTool : ITool
             return $"Error: could not resolve path '{requestedPath}': {ex.Message}";
         }
 
-        if (!absolutePath.StartsWith(RootDirectory, StringComparison.Ordinal))
+        if (!ReadFileTool.IsWithinRoot(RootDirectory, absolutePath))
             return $"Error: path '{absolutePath}' is outside the allowed root '{RootDirectory}'.";
 
         try

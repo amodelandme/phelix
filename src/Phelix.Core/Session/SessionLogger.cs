@@ -17,13 +17,6 @@ public static class SessionLogger
         ".phelix", "sessions"
     );
 
-    /// <summary>
-    /// Process-lifetime UUID that identifies this Phelix run. One value per process;
-    /// shared across all turns in the session. Used as the file name component and as
-    /// the <c>sessionId</c> field in every <see cref="TurnRecord"/> written this run.
-    /// </summary>
-    public static readonly string SessionId = Guid.NewGuid().ToString("N");
-
     static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -34,17 +27,22 @@ public static class SessionLogger
     /// as a single JSON line.
     /// </summary>
     /// <param name="record">The completed turn record to log.</param>
+    /// <param name="context">
+    /// Session identity used to derive the default file path. Ignored when
+    /// <paramref name="filePath"/> is supplied explicitly.
+    /// </param>
     /// <param name="filePath">
-    /// Destination <c>.jsonl</c> file. When <c>null</c>, a timestamped file in
-    /// <c>~/.phelix/sessions/</c> is used. Pass an explicit path in tests.
+    /// Destination <c>.jsonl</c> file. When <c>null</c>, the path is derived from
+    /// <paramref name="context"/>. Pass an explicit path in tests.
     /// </param>
     /// <param name="cancellationToken">Propagates cancellation to the file write.</param>
     public static async Task AppendAsync(
         TurnRecord record,
+        SessionContext? context = null,
         string? filePath = null,
         CancellationToken cancellationToken = default)
     {
-        string resolvedPath = filePath ?? DefaultFilePath();
+        string resolvedPath = filePath ?? DefaultFilePath(context);
 
         Directory.CreateDirectory(Path.GetDirectoryName(resolvedPath)!);
 
@@ -54,12 +52,13 @@ public static class SessionLogger
     }
 
     /// <summary>
-    /// Returns a path like <c>~/.phelix/sessions/2026-05-31-&lt;sessionId&gt;.jsonl</c>.
-    /// The session ID is a process-lifetime UUID — one file per run, date-prefixed for sorting.
+    /// Returns a path like <c>~/.phelix/sessions/&lt;fileSlug&gt;.jsonl</c>.
     /// </summary>
-    static string DefaultFilePath()
+    static string DefaultFilePath(SessionContext? context)
     {
-        string fileName = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd") + $"-{SessionId}.jsonl";
-        return Path.Combine(SessionDir, fileName);
+        string slug = context?.FileSlug
+            ?? DateTimeOffset.UtcNow.ToString("yyyy-MM-dd") + "-" + Guid.NewGuid().ToString("N");
+
+        return Path.Combine(SessionDir, $"{slug}.jsonl");
     }
 }

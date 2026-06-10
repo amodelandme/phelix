@@ -37,6 +37,13 @@ public static class ConfigLoader
     }
 
     /// <summary>
+    /// Resolves the effective <see cref="RetryPolicy"/> for <paramref name="model"/>
+    /// using the three-level fallback: model override → global default → hardcoded defaults.
+    /// </summary>
+    public static RetryPolicy ResolveRetryPolicy(PhelixConfig config, ModelConfig model) =>
+        model.Retry ?? config.Retry ?? RetryPolicy.Default;
+
+    /// <summary>
     /// Resolves the config file path to use for this run.
     /// </summary>
     /// <returns>

@@ -57,7 +57,7 @@ public class SessionLoggerTests : IDisposable
     private static TurnRecord BuildRecord(Turn turn, string userMessage) =>
         TurnRecord.FromTurn(
             turn,
-            sessionId: "test-session",
+            context: new SessionContext("test-session", null, DateTimeOffset.UtcNow),
             userMessage: userMessage,
             turnId: Guid.NewGuid().ToString("N"),
             startedAt: DateTimeOffset.UtcNow.AddSeconds(-2)
@@ -78,8 +78,8 @@ public class SessionLoggerTests : IDisposable
             modelId: "fake-model-v1"
         );
 
-        await SessionLogger.AppendAsync(BuildRecord(turn1, turn1.Messages[0].Text ?? string.Empty), _logFile);
-        await SessionLogger.AppendAsync(BuildRecord(turn2, turn2.Messages[0].Text ?? string.Empty), _logFile);
+        await SessionLogger.AppendAsync(BuildRecord(turn1, turn1.Messages[0].Text ?? string.Empty), filePath: _logFile);
+        await SessionLogger.AppendAsync(BuildRecord(turn2, turn2.Messages[0].Text ?? string.Empty), filePath: _logFile);
 
         string[] lines = await File.ReadAllLinesAsync(_logFile);
 
@@ -105,7 +105,7 @@ public class SessionLoggerTests : IDisposable
     public async Task SessionLogger_EachLine_IsIndependentlyParseable()
     {
         Turn turn = BuildFakeTurn("Hello", "Hi there!", "fake-model-v1");
-        await SessionLogger.AppendAsync(BuildRecord(turn, "Hello"), _logFile);
+        await SessionLogger.AppendAsync(BuildRecord(turn, "Hello"), filePath: _logFile);
 
         string line = (await File.ReadAllLinesAsync(_logFile))[0];
 
@@ -129,7 +129,7 @@ public class SessionLoggerTests : IDisposable
         ];
 
         Turn turn = BuildFakeTurn("Hello", "Hi!", "fake-model-v1", toolCalls);
-        await SessionLogger.AppendAsync(BuildRecord(turn, "Hello"), _logFile);
+        await SessionLogger.AppendAsync(BuildRecord(turn, "Hello"), filePath: _logFile);
 
         string line = (await File.ReadAllLinesAsync(_logFile))[0];
 
@@ -152,7 +152,7 @@ public class SessionLoggerTests : IDisposable
         ];
 
         Turn turn = BuildFakeTurn("Read the file", "Done.", "fake-model-v1", toolCalls);
-        await SessionLogger.AppendAsync(BuildRecord(turn, "Read the file"), _logFile);
+        await SessionLogger.AppendAsync(BuildRecord(turn, "Read the file"), filePath: _logFile);
 
         string line = (await File.ReadAllLinesAsync(_logFile))[0];
         TurnRecord? record = JsonSerializer.Deserialize<TurnRecord>(line, ReadOptions);
