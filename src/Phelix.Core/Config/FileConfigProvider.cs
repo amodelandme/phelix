@@ -78,7 +78,7 @@ public class FileConfigProvider(string filePath) : IConfigProvider
                 {
                     Provider = kv.Value.Provider ?? throw new ConfigException($"Model '{kv.Key}' is missing 'provider'."),
                     ModelId = kv.Value.ModelId ?? throw new ConfigException($"Model '{kv.Key}' is missing 'model_id'."),
-                    MaxTurns = kv.Value.MaxTurns ?? 5,
+                    MaxTurns = kv.Value.MaxTurns ?? ModelConfig.DefaultMaxTurns,
                     Retry = MapRetryPolicy(kv.Value.Retry)
                 },
                 StringComparer.Ordinal);
