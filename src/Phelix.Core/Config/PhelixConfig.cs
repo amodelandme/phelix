@@ -37,7 +37,7 @@ public record PhelixConfig
             ["qwen-flash"] = new()
             {
                 Provider = "openrouter",
-                ModelId = "qwen/qwen3.5-flash-02-23",
+                ModelId = "openrouter/owl-alpha",
                 MaxTurns = 5
             }
         }
