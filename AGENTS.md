@@ -8,7 +8,7 @@ Architecture document: `docs/ARCHITECTURE.md`. Read it before anything else.
 ## Agent-first conventions
 
 - **No `var`.** Always write explicit types. Agents cannot infer — they read what is written.
-- **XML documentation on all public/internal members.** Include `<param>`, `<returns>`, and a `<remarks>` block explaining *why* a design decision was made, not just what the code does.
+- **XML documentation follows `docs/decisions/xml-documentation-convention/spec.md`.** `<summary>` only when it states something the signature can't (skip it otherwise — don't restate the member name). `<remarks>` reserved for *why*, history, and cross-type invariants the code body can't say about itself. Enum members are always documented regardless. Read the spec before writing or reviewing any doc comment.
 - **Business-rule test names.** Test method names encode the domain rule being verified, not the method being called. Example: `RunTurnAsync_WhenHistoryIsEmpty_SendsSingleUserMessage`.
 - **Strong types over primitives.** Prefer named types (`ModelId`, `SessionId`) over raw `string` where the domain warrants it.
 - **Explicit `Result<T, TError>` return types.** Named failure cases over exceptions for recoverable errors.
@@ -75,7 +75,7 @@ This project is a learning environment as much as a build environment. The devel
 - No magic numbers or strings. Named constants with explanatory names.
 - No clever constructs. Boring and readable beats compact and opaque.
 - Identifiers are sentence fragments. A reader should understand intent from the name alone.
-- Include XML Documentation for use by agents reading/scanning the codebase. Make it easy for them to understand.
+- Include XML Documentation for use by agents reading/scanning the codebase, per `docs/decisions/xml-documentation-convention/spec.md` — favor a strong class-level `<remarks>` over thorough but low-information member summaries.
 
 ## Branch strategy
 

@@ -30,9 +30,6 @@ public record TurnRecord(
     /// </summary>
     string? SessionName,
 
-    /// <summary>
-    /// The user's input message that triggered this turn.
-    /// </summary>
     string UserMessage,
 
     /// <summary>
@@ -57,9 +54,6 @@ public record TurnRecord(
     /// </summary>
     DateTimeOffset CompletedAt,
 
-    /// <summary>
-    /// The reason the agent loop stopped for this turn.
-    /// </summary>
     TurnExitReason ExitReason,
 
     /// <summary>
@@ -74,9 +68,6 @@ public record TurnRecord(
     IReadOnlyList<ToolCallRecord> ToolCalls
 )
 {
-    /// <summary>
-    /// Constructs a <see cref="TurnRecord"/> from a completed <see cref="Turn"/>.
-    /// </summary>
     /// <param name="turn">The completed runtime turn to record.</param>
     /// <param name="context">The session identity for this run.</param>
     /// <param name="userMessage">The user input that initiated the turn.</param>

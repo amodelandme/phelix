@@ -2,9 +2,6 @@ using System.Text.Json.Serialization;
 
 namespace Phelix.Core.Agent;
 
-/// <summary>
-/// Describes why an agent turn stopped executing.
-/// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum TurnExitReason
 {

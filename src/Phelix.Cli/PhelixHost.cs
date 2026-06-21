@@ -23,9 +23,6 @@ namespace Phelix.Cli;
 /// </remarks>
 internal static class PhelixHost
 {
-    /// <summary>
-    /// Constructs and returns all application components needed to run the session.
-    /// </summary>
     /// <remarks>
     /// The caller is responsible for disposing <c>SessionStore</c> and
     /// <paramref name="tracerProvider"/> (via the returned tuple) when the session ends.
@@ -124,9 +121,6 @@ internal static class PhelixHost
         return (session, sessionStore, tracerProvider);
     }
 
-    /// <summary>
-    /// Builds the <see cref="IApprovalGate"/> for <paramref name="sessionMode"/>.
-    /// </summary>
     static IApprovalGate BuildApprovalGate(SessionMode sessionMode, IReadOnlySet<string>? allowedCommandPrefixes)
     {
         if (sessionMode == SessionMode.AllowAll)

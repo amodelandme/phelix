@@ -3,16 +3,12 @@ using Phelix.Core.Agent;
 
 namespace Phelix.Core.Tools;
 
-/// <summary>
-/// Reads the contents of a file and returns them as a string.
-/// </summary>
 /// <remarks>
 /// Path traversal is prevented by resolving the requested path to an absolute path and
 /// verifying it falls within <see cref="RootDirectory"/> before any I/O is performed.
 /// </remarks>
 public class ReadFileTool : ITool
 {
-    /// <summary>The directory outside of which file reads are refused.</summary>
     public string RootDirectory { get; }
 
     /// <inheritdoc/>
