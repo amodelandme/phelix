@@ -1,8 +1,16 @@
 # XML Documentation Coverage
 
-**Status:** Approved  
-**Phase:** Phase Queue  
+**Status:** Approved (the documentation *standard* section below is superseded — see note)
+**Phase:** Phase Queue
 **Date:** 2026-06-07
+
+> **2026-06-20:** The "Documentation standard" section below mandates a
+> `<summary>` on every member unconditionally. An audit found this produces
+> ~29% pure-restatement summaries with no information value. The standard is
+> superseded by `docs/decisions/xml-documentation-convention/spec.md` — use
+> that spec for all new documentation and reviews. This file is kept for
+> historical record of the original coverage pass (which files were touched
+> and why); its standard section should not be followed going forward.
 
 ---
 
