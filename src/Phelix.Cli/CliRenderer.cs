@@ -4,9 +4,6 @@ using Phelix.Core.Session;
 
 namespace Phelix.Cli;
 
-/// <summary>
-/// Renders agent output to the terminal for the CLI REPL.
-/// </summary>
 /// <remarks>
 /// Methods are designed to be passed as callbacks to
 /// <see cref="Phelix.Core.Agent.TurnCallbacks"/>. Each matches the delegate

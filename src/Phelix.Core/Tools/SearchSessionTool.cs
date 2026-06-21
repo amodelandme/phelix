@@ -4,9 +4,6 @@ using Phelix.Core.Session;
 
 namespace Phelix.Core.Tools;
 
-/// <summary>
-/// Searches the current session's tool call history for relevant output.
-/// </summary>
 /// <remarks>
 /// Backed by the FTS5-indexed <c>tool_outputs</c> table in <see cref="ISessionStore"/>.
 /// The tool is always registered in <see cref="ToolRegistry"/> — not only after compaction —

@@ -4,9 +4,6 @@ using Phelix.Core.Agent;
 
 namespace Phelix.Core.Tools;
 
-/// <summary>
-/// Searches file contents for a literal string or .NET regular expression.
-/// </summary>
 /// <remarks>
 /// Walks files in <see cref="RootDirectory"/> matching an optional file glob,
 /// reads each file line by line, and returns matching lines with their file
@@ -16,7 +13,6 @@ public class SearchCodeTool : ITool
 {
     const int DefaultMaxResults = 50;
 
-    /// <summary>The directory all searches are rooted at.</summary>
     public string RootDirectory { get; }
 
     /// <inheritdoc/>

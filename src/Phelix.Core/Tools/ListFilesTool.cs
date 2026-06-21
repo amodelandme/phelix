@@ -3,9 +3,6 @@ using Phelix.Core.Agent;
 
 namespace Phelix.Core.Tools;
 
-/// <summary>
-/// Lists files matching a glob pattern within the root directory.
-/// </summary>
 /// <remarks>
 /// Supports <c>**</c> for recursive matching via <see cref="SearchOption.AllDirectories"/>.
 /// Results are sorted lexicographically and capped at <c>max_results</c>.
@@ -18,10 +15,8 @@ public class ListFilesTool : ITool
     static readonly IReadOnlySet<string> DefaultExcludedDirectories =
         new HashSet<string>(StringComparer.Ordinal) { ".git", "bin", "obj" };
 
-    /// <summary>The directory all glob searches are rooted at.</summary>
     public string RootDirectory { get; }
 
-    /// <summary>Directory segment names excluded from all results.</summary>
     public IReadOnlySet<string> ExcludedDirectories { get; }
 
     /// <inheritdoc/>

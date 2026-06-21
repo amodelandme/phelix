@@ -3,9 +3,6 @@ using Phelix.Core.Agent;
 
 namespace Phelix.Core.Tools;
 
-/// <summary>
-/// Writes text content to a file at the given path.
-/// </summary>
 /// <remarks>
 /// Overwrites the file if it already exists. Creates intermediate directories
 /// as needed. Path traversal is prevented by the same root-confinement check
@@ -13,7 +10,6 @@ namespace Phelix.Core.Tools;
 /// </remarks>
 public class WriteFileTool : ITool
 {
-    /// <summary>The directory outside of which file writes are refused.</summary>
     public string RootDirectory { get; }
 
     /// <inheritdoc/>

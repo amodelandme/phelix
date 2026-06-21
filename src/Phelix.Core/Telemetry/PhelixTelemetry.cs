@@ -19,7 +19,6 @@ public static class PhelixTelemetry
     /// <summary>The single source for all Phelix-emitted spans.</summary>
     public static readonly ActivitySource Source = new(SourceName, "0.1");
 
-    /// <summary>Span names.</summary>
     public static class Spans
     {
         /// <summary>Span wrapping one full agent loop turn, from user input to final reply.</summary>

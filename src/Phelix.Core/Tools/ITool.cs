@@ -21,9 +21,6 @@ public interface ITool
     /// </summary>
     ApprovalTier ApprovalTier { get; }
 
-    /// <summary>
-    /// Executes the tool with the arguments the model supplied.
-    /// </summary>
     /// <param name="parameters">
     /// Key/value pairs extracted from the model's tool-call response.
     /// Keys are parameter names; values are deserialized from JSON and may be <c>null</c>.

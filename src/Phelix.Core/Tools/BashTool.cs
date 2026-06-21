@@ -4,13 +4,11 @@ using Phelix.Core.Agent;
 
 namespace Phelix.Core.Tools;
 
-/// <summary>
-/// Runs a bash command and returns its combined stdout and stderr output.
-/// </summary>
 /// <remarks>
-/// Executes via <c>/bin/sh -c</c>. The working directory defaults to
-/// <see cref="RootDirectory"/> and is validated against it before execution.
-/// Commands run with the current user's permissions — no sandboxing in MVP.
+/// Executes via <c>/bin/sh -c</c> and returns combined stdout/stderr. The working
+/// directory defaults to <see cref="RootDirectory"/> and is validated against it
+/// before execution. Commands run with the current user's permissions — no
+/// sandboxing in MVP.
 /// </remarks>
 public class BashTool : ITool
 {

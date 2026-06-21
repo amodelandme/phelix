@@ -14,9 +14,6 @@ public record ToolCallRecord(
     /// </summary>
     string CallId,
 
-    /// <summary>
-    /// The name of the tool the model requested to invoke.
-    /// </summary>
     string Name,
 
     /// <summary>

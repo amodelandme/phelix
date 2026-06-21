@@ -11,9 +11,6 @@ namespace Phelix.Core.Session;
 /// </remarks>
 public interface ISessionSummarizer
 {
-    /// <summary>
-    /// Produces a summary of the session identified by <paramref name="sessionId"/>.
-    /// </summary>
     /// <param name="sessionId">The session to summarize.</param>
     /// <param name="cancellationToken">Propagates cancellation from the caller.</param>
     /// <returns>
