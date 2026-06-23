@@ -82,14 +82,17 @@ return await root.Parse(args).InvokeAsync();
 
 static async Task RunSingleTurnAsync(PhelixSession session, string userPrompt, CancellationToken ct)
 {
+    StreamingMarkdownWriter mdWriter = new();
+
     TurnCallbacks callbacks = new(
-        OnChunk:         CliRenderer.WriteChunk,
-        OnToolStarted:   CliRenderer.WriteToolStarted,
+        OnChunk:         mdWriter.Write,
+        OnToolStarted:   async (name, args) => { mdWriter.Flush(); await CliRenderer.WriteToolStarted(name, args); },
         OnToolCompleted: CliRenderer.WriteToolCompleted
     );
 
     TurnResult result = await session.RunTurnAsync(userPrompt, callbacks, ct);
 
+    mdWriter.Flush();
     Console.WriteLine();
 
     switch (result)

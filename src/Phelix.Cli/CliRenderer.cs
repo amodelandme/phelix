@@ -9,24 +9,12 @@ namespace Phelix.Cli;
 /// <see cref="Phelix.Core.Agent.TurnCallbacks"/>. Each matches the delegate
 /// signature expected by <see cref="Phelix.Core.Agent.AgentLoop"/>.
 ///
-/// Raw <see cref="Console.Write"/> is used for the live token stream to avoid
-/// any latency introduced by Spectre's markup pipeline. All structural elements
-/// (tool events, warnings, separators) go through <see cref="AnsiConsole"/> so
-/// they can carry colour and style without affecting stream throughput.
+/// Streamed text chunks go through <see cref="StreamingMarkdownWriter"/> instead of
+/// this class. Structural elements (tool events, warnings, separators) go through
+/// <see cref="AnsiConsole"/> so they can carry colour and style.
 /// </remarks>
 internal static class CliRenderer
 {
-    /// <summary>
-    /// Writes a single streamed text chunk to stdout without a trailing newline.
-    /// Tokens appear inline as they arrive, producing a live-typing effect.
-    /// </summary>
-    /// <param name="chunk">The text fragment to write.</param>
-    internal static Task WriteChunk(string chunk)
-    {
-        Console.Write(chunk);
-        return Task.CompletedTask;
-    }
-
     /// <summary>
     /// Writes a dimmed grey line indicating a tool call is about to execute.
     /// </summary>
