@@ -4,6 +4,13 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!--
+      NU1903: SQLitePCLRaw.lib.e_sqlite3, transitive via Microsoft.Data.Sqlite.
+      GHSA-2m69-gcr7-jv3q has no patched version as of this writing — affects
+      all releases up to and including 2.1.11, which is what even the latest
+      Microsoft.Data.Sqlite (10.0.9) depends on. Revisit when a fix ships.
+    -->
+    <NoWarn>$(NoWarn);NU1903</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

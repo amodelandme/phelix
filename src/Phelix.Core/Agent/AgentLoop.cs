@@ -69,7 +69,7 @@ public class AgentLoop(IChatClient chatClient, AgentOptions options, ToolRegistr
 
         List<ChatMessage> messages = [.. conversationHistory, new(ChatRole.User, userMessage)];
 
-        ChatOptions chatOptions = new ChatOptions
+        ChatOptions chatOptions = new()
         {
             ModelId = options.ModelId,
             Instructions = options.SystemPrompt,
@@ -85,7 +85,7 @@ public class AgentLoop(IChatClient chatClient, AgentOptions options, ToolRegistr
         {
             while (true)
             {
-                List<ChatResponseUpdate> updates = new();
+                List<ChatResponseUpdate> updates = [];
 
                 await foreach (ChatResponseUpdate update in chatClient.GetStreamingResponseAsync(messages, chatOptions, cancellationToken))
                 {
