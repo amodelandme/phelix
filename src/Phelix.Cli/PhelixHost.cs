@@ -38,14 +38,16 @@ internal static class PhelixHost
     /// </param>
     /// <returns>
     /// A named tuple containing the configured <see cref="PhelixSession"/>,
-    /// <see cref="ISessionStore"/>, and an optional <see cref="TracerProvider"/>.
+    /// <see cref="ISessionStore"/>, an optional <see cref="TracerProvider"/>, and the
+    /// <see cref="SessionInfo"/> describing the active model, provider, and mode for display.
     /// The caller is responsible for disposing <see cref="ISessionStore"/> and
     /// <see cref="TracerProvider"/> when the session ends.
     /// </returns>
     internal static (
         PhelixSession Session,
         ISessionStore SessionStore,
-        TracerProvider? TracerProvider) Build(
+        TracerProvider? TracerProvider,
+        SessionInfo SessionInfo) Build(
         SessionMode sessionMode = SessionMode.Default,
         IReadOnlySet<string>? allowedCommandPrefixes = null,
         string? sessionName = null)
@@ -124,7 +126,13 @@ internal static class PhelixHost
 
         PhelixSession session = new(agentLoop, sessionStore, compactionPolicy, summarizer, sessionContext);
 
-        return (session, sessionStore, tracerProvider);
+        SessionInfo sessionInfo = new(
+            ModelName: config.ActiveModel,
+            ModelId: activeModel.ModelId,
+            Provider: activeModel.Provider,
+            Mode: sessionMode);
+
+        return (session, sessionStore, tracerProvider, sessionInfo);
     }
 
     static IApprovalGate BuildApprovalGate(SessionMode sessionMode, IReadOnlySet<string>? allowedCommandPrefixes)
