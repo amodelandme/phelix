@@ -46,19 +46,19 @@ root.SetAction(async (ParseResult result, CancellationToken ct) =>
 
     (PhelixSession session,
      ISessionStore sessionStore,
-     TracerProvider? tracerProvider) = PhelixHost.Build(sessionMode, allowedCommandPrefixes, sessionName);
+     TracerProvider? tracerProvider,
+     SessionInfo sessionInfo) = PhelixHost.Build(sessionMode, allowedCommandPrefixes, sessionName);
 
     using TracerProvider? otel = tracerProvider;
     using IDisposable sessionStoreDisposable = (IDisposable)sessionStore;
 
     if (prompt is not null)
     {
-        await RunSingleTurnAsync(session, prompt.Trim(), ct);
+        await RunSingleTurnAsync(session, sessionInfo, prompt.Trim(), ct);
         return;
     }
 
-    AnsiConsole.MarkupLine("[#a78bfa]Phelix[/][grey dim] — type 'exit' to quit.[/]");
-    AnsiConsole.WriteLine();
+    CliRenderer.WriteSessionBanner(sessionInfo);
 
     while (true)
     {
@@ -73,7 +73,13 @@ root.SetAction(async (ParseResult result, CancellationToken ct) =>
         if (string.IsNullOrEmpty(userPrompt))
             continue;
 
-        await RunSingleTurnAsync(session, userPrompt, ct);
+        if (userPrompt.Equals("/status", StringComparison.OrdinalIgnoreCase))
+        {
+            CliRenderer.WriteStatus(sessionInfo, session.TotalTokenCount);
+            continue;
+        }
+
+        await RunSingleTurnAsync(session, sessionInfo, userPrompt, ct);
     }
 });
 
@@ -81,7 +87,7 @@ return await root.Parse(args).InvokeAsync();
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-static async Task RunSingleTurnAsync(PhelixSession session, string userPrompt, CancellationToken ct)
+static async Task RunSingleTurnAsync(PhelixSession session, SessionInfo sessionInfo, string userPrompt, CancellationToken ct)
 {
     StreamingMarkdownWriter mdWriter = new();
 
@@ -106,6 +112,9 @@ static async Task RunSingleTurnAsync(PhelixSession session, string userPrompt, C
             CliRenderer.WriteError(failure.ErrorMessage);
             break;
     }
+
+    if (result is TurnResult.Success success2)
+        CliRenderer.WriteTurnFooter(success2.Turn.Response.ModelId ?? sessionInfo.ModelId, success2.Turn.Usage, session.TotalTokenCount);
 
     CliRenderer.WriteTurnSeparator();
 }
