@@ -38,9 +38,10 @@ public record PhelixConfig
             {
                 Provider = "openrouter",
                 ModelId = "openrouter/owl-alpha",
-                MaxTurns = 5
+                MaxTurns = ModelConfig.DefaultMaxTurns
             }
-        }
+        },
+        AllowedCommands = new HashSet<string>()
     };
 
     /// <summary>
@@ -74,4 +75,17 @@ public record PhelixConfig
     /// when <c>null</c>.
     /// </summary>
     public RetryPolicy? Retry { get; init; }
+
+    /// <summary>
+    /// Bash executable names the user has pre-approved for every session — e.g.
+    /// <c>["ls", "cat", "git", "dotnet"]</c>. A <c>bash</c> call whose first token
+    /// matches an entry runs without the <c>Confirm</c>-tier prompt; everything else
+    /// still requires explicit confirmation.
+    /// </summary>
+    /// <remarks>
+    /// This is the persistent equivalent of the <c>--accepts-commands</c> CLI flag.
+    /// The two are merged at startup, so the flag adds to (never replaces) this set.
+    /// Defaults to empty — out of the box, every command is gated.
+    /// </remarks>
+    public IReadOnlySet<string> AllowedCommands { get; init; } = new HashSet<string>();
 }

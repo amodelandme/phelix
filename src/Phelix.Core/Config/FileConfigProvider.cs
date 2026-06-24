@@ -95,7 +95,8 @@ public class FileConfigProvider(string filePath) : IConfigProvider
             SystemPrompt = systemPrompt,
             Providers = providers,
             Models = models,
-            Retry = MapRetryPolicy(raw.Retry)
+            Retry = MapRetryPolicy(raw.Retry),
+            AllowedCommands = new HashSet<string>(raw.AllowedCommands, StringComparer.Ordinal)
         };
     }
 
@@ -126,6 +127,7 @@ public class FileConfigProvider(string filePath) : IConfigProvider
         public Dictionary<string, RawProviderConfig> Providers { get; set; } = [];
         public Dictionary<string, RawModelConfig> Models { get; set; } = [];
         public RawRetryPolicy? Retry { get; set; }
+        public List<string> AllowedCommands { get; set; } = [];
     }
 
     class RawProviderConfig
