@@ -58,6 +58,51 @@ public class ListFilesToolTests : IDisposable
     }
 
     [Fact]
+    public async Task ListFilesTool_StarPattern_ListsTopLevelOnly()
+    {
+        CreateFile("top.cs");
+        CreateFile(Path.Combine("src", "Nested.cs"));
+        ListFilesTool tool = Tool();
+
+        string result = await tool.ExecuteAsync(
+            new Dictionary<string, object?> { ["pattern"] = "*" },
+            CancellationToken.None);
+
+        Assert.Contains("top.cs", result);
+        Assert.DoesNotContain("Nested.cs", result);
+    }
+
+    [Fact]
+    public async Task ListFilesTool_DoubleStarPattern_RecursesIntoSubdirectories()
+    {
+        CreateFile("top.cs");
+        CreateFile(Path.Combine("src", "Nested.cs"));
+        ListFilesTool tool = Tool();
+
+        string result = await tool.ExecuteAsync(
+            new Dictionary<string, object?> { ["pattern"] = "**/*.cs" },
+            CancellationToken.None);
+
+        Assert.Contains("top.cs", result);
+        Assert.Contains("Nested.cs", result);
+    }
+
+    [Fact]
+    public async Task ListFilesTool_ScopedNonRecursivePattern_ListsThatDirectoryOnly()
+    {
+        CreateFile(Path.Combine("src", "Direct.cs"));
+        CreateFile(Path.Combine("src", "sub", "Deep.cs"));
+        ListFilesTool tool = Tool();
+
+        string result = await tool.ExecuteAsync(
+            new Dictionary<string, object?> { ["pattern"] = "src/*.cs" },
+            CancellationToken.None);
+
+        Assert.Contains("Direct.cs", result);
+        Assert.DoesNotContain("Deep.cs", result);
+    }
+
+    [Fact]
     public async Task ListFilesTool_NoMatches_ReturnsNoMatchesMessage()
     {
         ListFilesTool tool = Tool();
@@ -127,7 +172,7 @@ public class ListFilesToolTests : IDisposable
         ListFilesTool tool = Tool();
 
         string result = await tool.ExecuteAsync(
-            new Dictionary<string, object?> { ["pattern"] = "*" },
+            new Dictionary<string, object?> { ["pattern"] = "**" },
             CancellationToken.None);
 
         Assert.DoesNotContain(".git", result);
@@ -144,7 +189,7 @@ public class ListFilesToolTests : IDisposable
         ListFilesTool tool = new(_root, new HashSet<string> { "vendor" });
 
         string result = await tool.ExecuteAsync(
-            new Dictionary<string, object?> { ["pattern"] = "*" },
+            new Dictionary<string, object?> { ["pattern"] = "**" },
             CancellationToken.None);
 
         Assert.DoesNotContain("vendor", result);
@@ -173,7 +218,7 @@ public class ListFilesToolTests : IDisposable
         ListFilesTool tool = new(_root, new HashSet<string>());
 
         string result = await tool.ExecuteAsync(
-            new Dictionary<string, object?> { ["pattern"] = "*" },
+            new Dictionary<string, object?> { ["pattern"] = "**" },
             CancellationToken.None);
 
         Assert.Contains(".git", result);
