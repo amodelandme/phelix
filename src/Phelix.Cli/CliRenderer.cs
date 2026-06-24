@@ -23,7 +23,7 @@ internal static class CliRenderer
     internal static Task WriteToolStarted(string toolName, IReadOnlyDictionary<string, object?> args)
     {
         string argList = BuildArgList(args);
-        AnsiConsole.MarkupLine($"[grey]  ◆ {Markup.Escape(toolName)}{argList}[/]");
+        AnsiConsole.MarkupLine($"[#a78bfa]  ◆ {Markup.Escape(toolName)}[/][grey dim]{argList}[/]");
         return Task.CompletedTask;
     }
 
@@ -36,11 +36,13 @@ internal static class CliRenderer
     /// <param name="duration">Wall-clock time the tool took to execute.</param>
     internal static Task WriteToolCompleted(string toolName, ToolCallStatus status, TimeSpan duration)
     {
-        string indicator = status == ToolCallStatus.Succeeded ? "✓" : "✗";
-        string color     = status == ToolCallStatus.Succeeded ? "grey" : "red";
-        string ms        = $"{duration.TotalMilliseconds:0}ms";
+        string ms = $"{duration.TotalMilliseconds:0}ms";
 
-        AnsiConsole.MarkupLine($"[{color}]  {indicator} {Markup.Escape(toolName)} ({ms})[/]");
+        if (status == ToolCallStatus.Succeeded)
+            AnsiConsole.MarkupLine($"[#a78bfa]  ✓ {Markup.Escape(toolName)}[/] [grey dim]({ms})[/]");
+        else
+            AnsiConsole.MarkupLine($"[red]  ✗ {Markup.Escape(toolName)} ({ms})[/]");
+
         return Task.CompletedTask;
     }
 
@@ -49,7 +51,7 @@ internal static class CliRenderer
     /// </summary>
     internal static void WriteTurnSeparator()
     {
-        AnsiConsole.Write(new Rule().RuleStyle("grey dim"));
+        AnsiConsole.Write(new Rule().RuleStyle("#a78bfa dim"));
         AnsiConsole.WriteLine();
     }
 

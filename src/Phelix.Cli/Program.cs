@@ -3,6 +3,7 @@ using OpenTelemetry.Trace;
 using Phelix.Cli;
 using Phelix.Core.Agent;
 using Phelix.Core.Session;
+using Spectre.Console;
 
 // ─── Options & arguments ──────────────────────────────────────────────────────
 
@@ -39,7 +40,7 @@ root.SetAction(async (ParseResult result, CancellationToken ct) =>
     if (prompt is null)
     {
         CliRenderer.WritePromptLabel("Session name (optional, press Enter to skip):");
-        Console.Write("> ");
+        AnsiConsole.Markup("[#a78bfa]> [/]");
         sessionName = Console.ReadLine();
     }
 
@@ -56,12 +57,12 @@ root.SetAction(async (ParseResult result, CancellationToken ct) =>
         return;
     }
 
-    Console.WriteLine("Phelix — type 'exit' to quit.");
-    Console.WriteLine();
+    AnsiConsole.MarkupLine("[#a78bfa]Phelix[/][grey dim] — type 'exit' to quit.[/]");
+    AnsiConsole.WriteLine();
 
     while (true)
     {
-        Console.Write("> ");
+        AnsiConsole.Markup("[#a78bfa]> [/]");
         string? rawInput = Console.ReadLine();
 
         if (rawInput is null || rawInput.Trim().Equals("exit", StringComparison.OrdinalIgnoreCase))

@@ -75,7 +75,7 @@ internal static class MarkdownBlockRenderer
 
     static void RenderList(ListBlock list, IAnsiConsole console, int depth)
     {
-        string indent = new string(' ', depth * 2);
+        string indent = new(' ', depth * 2);
         int ordinal = list.OrderedStart is not null && int.TryParse(list.OrderedStart, out int start) ? start : 1;
 
         foreach (Block item in list)
@@ -110,11 +110,11 @@ internal static class MarkdownBlockRenderer
 
         bool headerProcessed = false;
 
-        foreach (MarkdigTableRow row in table)
+        foreach (MarkdigTableRow row in table.Cast<MarkdigTableRow>())
         {
             if (!headerProcessed && row.IsHeader)
             {
-                foreach (MarkdigTableCell cell in row)
+                foreach (MarkdigTableCell cell in row.Cast<MarkdigTableCell>())
                     spectreTable.AddColumn(InlinesToMarkup(GetCellInline(cell)));
 
                 headerProcessed = true;
