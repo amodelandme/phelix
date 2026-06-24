@@ -86,7 +86,13 @@ internal static class PhelixHost
             config.SystemPrompt,
             Directory.GetCurrentDirectory());
 
-        IApprovalGate approvalGate = BuildApprovalGate(sessionMode, allowedCommandPrefixes);
+        // Persistent config allowlist and the per-run CLI flag are additive: the flag
+        // extends the trusted set for this session rather than overriding the config.
+        HashSet<string> effectiveAllowedCommands = new(config.AllowedCommands, StringComparer.Ordinal);
+        if (allowedCommandPrefixes is not null)
+            effectiveAllowedCommands.UnionWith(allowedCommandPrefixes);
+
+        IApprovalGate approvalGate = BuildApprovalGate(sessionMode, effectiveAllowedCommands);
 
         AgentOptions agentOptions = new()
         {

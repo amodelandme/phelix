@@ -10,7 +10,7 @@ namespace Phelix.Core.Agent;
 /// </remarks>
 public record AgentOptions
 {
-    const int MaxTurnsDefault = 5;
+    const int MaxTurnsDefault = 100;
     const int CompactionThresholdTokensDefault = 40_000;
 
     /// <summary>
@@ -26,8 +26,9 @@ public record AgentOptions
     public required string SystemPrompt { get; init; }
 
     /// <summary>
-    /// Maximum number of turns the loop will execute before halting.
-    /// Guards against runaway agentic sessions. Defaults to <c>5</c>.
+    /// Maximum number of tool-call rounds the loop executes within a single turn
+    /// before halting. Resets every turn — this is a per-turn runaway guard, not a
+    /// session-wide budget. Defaults to <c>100</c>.
     /// </summary>
     public int MaxTurns { get; init; } = MaxTurnsDefault;
 
