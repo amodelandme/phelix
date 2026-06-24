@@ -4,7 +4,9 @@ using Phelix.Core.Agent;
 namespace Phelix.Core.Tools;
 
 /// <remarks>
-/// Supports <c>**</c> for recursive matching via <see cref="SearchOption.AllDirectories"/>.
+/// A pattern containing <c>**</c> matches recursively via
+/// <see cref="SearchOption.AllDirectories"/>; a pattern without <c>**</c> lists only
+/// the targeted directory via <see cref="SearchOption.TopDirectoryOnly"/>.
 /// Results are sorted lexicographically and capped at <c>max_results</c>.
 /// Directories named in <see cref="ExcludedDirectories"/> are never included in results.
 /// </remarks>
@@ -23,7 +25,7 @@ public class ListFilesTool : ITool
     public string Name => "list_files";
 
     /// <inheritdoc/>
-    public string Description => "Lists files matching a glob pattern relative to the root directory. Use ** for recursive matching (e.g. src/**/*.cs). Prefer scoped patterns over bare * to avoid broad results. .git, bin, and obj directories are always excluded. Returns one path per line, sorted, and capped at max_results.";
+    public string Description => "Lists files matching a glob pattern relative to the root directory. A pattern without ** lists only the matched directory (e.g. * for top-level files); use ** for recursive matching (e.g. src/**/*.cs). .git, bin, and obj directories are always excluded. Returns one path per line, sorted, and capped at max_results.";
 
     /// <inheritdoc/>
     public ApprovalTier ApprovalTier => ApprovalTier.Auto;
@@ -114,8 +116,9 @@ public class ListFilesTool : ITool
             Description);
 
     // Directory.GetFiles does not support ** globs. Extract the file name pattern from
-    // the last segment and search AllDirectories, then filter by path prefix for
-    // patterns like "src/**/*.cs".
+    // the last segment, resolve the search root from the directory prefix, and select
+    // recursion depth from whether the glob contains ** (e.g. "src/**/*.cs" recurses
+    // under src; "src/*.cs" lists only src).
     static string[] ResolveGlob(string root, string glob, IReadOnlySet<string> excludedDirectories)
     {
         string normalizedGlob = glob.Replace('\\', '/');
@@ -131,7 +134,12 @@ public class ListFilesTool : ITool
         if (!Directory.Exists(searchRoot))
             return [];
 
-        string[] all = Directory.GetFiles(searchRoot, filePattern, SearchOption.AllDirectories);
+        // `**` selects recursion; its absence lists only the targeted directory.
+        SearchOption depth = normalizedGlob.Contains("**")
+            ? SearchOption.AllDirectories
+            : SearchOption.TopDirectoryOnly;
+
+        string[] all = Directory.GetFiles(searchRoot, filePattern, depth);
 
         if (excludedDirectories.Count == 0)
             return all;
