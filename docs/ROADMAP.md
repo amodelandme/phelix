@@ -127,23 +127,13 @@ code, and thematic breaks via Spectre. All literal text passes through
 markdown through. New `tests/Phelix.Cli.Tests` project (`Spectre.Console.Testing`)
 covers rendering and escaping. Spec in `docs/decisions/markdown-block-rendering/`.
 
-### CliRenderer chrome accent pass
-Markdown-block rendering colors headings, bullets, links, and inline code, but the
-surrounding `CliRenderer` chrome — prompt arrow, app name/version line, model/format
-metadata, tool-call icons (`◆` / `✓` / `✗`) — still renders in flat grey/white with
-no shared accent. Bring `CliRenderer` in line with the indigo accent (`#a78bfa`)
-already used for headings and bullets in `MarkdownBlockRenderer`:
-- Prompt arrow and app name pick up the accent color
-- Tool-call markers (`◆` start, `✓`/`✗` complete) and the turn-separator rule reuse
-  the same accent rather than the current flat `grey`
-- Decide whether metadata (model id, mode) gets a distinct secondary tone or stays
-  dim/grey for visual hierarchy
-- Audit contrast on every changed color the way the inline-code badge fix in
-  `MarkdownBlockRenderer` (`white on grey23`, not `grey on grey19`) required —
-  verify via raw ANSI dump in a real pty, not a piped/non-TTY capture, since
-  `AnsiConsole` silently strips styling when output isn't a terminal
-- Needs a spec in `docs/decisions/` before code — small surface area but touches
-  every line `CliRenderer` prints
+### ~~CliRenderer chrome accent pass~~ ✓ done — PR #34
+`CliRenderer` chrome brought in line with the indigo accent (`#a78bfa`) established
+by `MarkdownBlockRenderer`. Tool-start `◆` and tool-name, tool-complete `✓` and
+tool-name, turn-separator rule, REPL `>` prompt, and "Phelix" greeting wordmark all
+use the accent. Arg lists and duration metadata stay `grey dim` for visual hierarchy.
+`✗` and warnings stay red/yellow — semantic urgency preserved. Spec and implementation
+notes in `docs/decisions/cli-chrome-accents/`.
 
 ---
 
