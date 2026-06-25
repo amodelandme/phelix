@@ -135,6 +135,33 @@ use the accent. Arg lists and duration metadata stay `grey dim` for visual hiera
 `✗` and warnings stay red/yellow — semantic urgency preserved. Spec and implementation
 notes in `docs/decisions/cli-chrome-accents/`.
 
+### ~~OpenTelemetry tracing~~ ✓ done
+`PhelixTelemetry` exposes a single `ActivitySource` with all span and tag name
+constants. Every agent turn and tool call emits a structured span; wired through
+`AgentLoop`, `PhelixHost`, and `Program.cs`. Verified end-to-end against a local
+Jaeger instance. Spec and implementation notes in `docs/decisions/opentelemetry/`.
+
+### ~~Persistent allowed commands~~ ✓ done — PR #35
+Trusted bash command prefixes can now be persisted in config (`allowed_commands` on
+`PhelixConfig`, surfaced via `FileConfigProvider`) instead of only via the per-session
+`--accepts-commands` flag. Supersedes the flag-only model from the bash-command-allowlist
+decision for the single-developer-on-their-own-machine case. Same fix also corrects the
+`max-turns` default to use `ModelConfig.DefaultMaxTurns`. Spec in
+`docs/decisions/persistent-allowed-commands/`.
+
+### ~~`list_files` recursion depth~~ ✓ done — PR #38
+`ResolveGlob` selects `SearchOption.AllDirectories` when the normalized glob contains
+`**`, otherwise `SearchOption.TopDirectoryOnly` — recursion now follows the pattern's
+intent rather than always recursing. No new tool parameter. Spec and implementation
+notes in `docs/decisions/list-files-recursion-depth/`.
+
+### ~~Session info display~~ ✓ done — PR #39
+Startup banner, per-turn footer, and `/status` surface the active model name/id,
+provider, session mode, and live token usage. `SessionInfo` is a CLI-layer presentation
+carrier rendered via shared `CliRenderer` helpers — no changes to `PhelixSession`,
+`AgentLoop`, `Turn`, or `UsageSummary`. Spec and implementation notes in
+`docs/decisions/session-info-display/`.
+
 ---
 
 ## Backlog
@@ -169,7 +196,8 @@ Agent loops inevitably surface environment variables and API keys in tool output
 All tool schemas are registered at startup and re-sent on every turn regardless of use. At ~160 tokens per tool, this is a fixed floor that compounds with every tool added — measured at 98% of baseline turn cost on a minimal session.
 - Replace the startup registry with a lightweight catalog (tool name + one-liner description)
 - Agent loads full schemas on demand when it decides it needs a tool
-- Requires a spec before any code is touched; architectural change with session and approval-gate implications
+- Spec written in `docs/decisions/dynamic-tool-loading/spec.md`; no implementation yet — most spec-ready backlog item
+- Architectural change with session and approval-gate implications
 
 ### Structured loop: Plan → Execute → Verify
 The agent retries from scratch on failure. The right pattern is explicit plan-before-execute.
