@@ -164,13 +164,162 @@ carrier rendered via shared `CliRenderer` helpers — no changes to `PhelixSessi
 
 ---
 
+## Phase 3 — Adoption & Extensibility
+*The shift from "well-engineered personal tool" to "harness other developers can
+adopt and shape." Items are ordered for implementation — each builds on the one
+before. Start a spec in `docs/decisions/<feature>/` before touching code. This phase
+absorbs the backlog items that belong to the adoption/extensibility arc; pure R&D
+items (BM25, semantic search, knowledge graph) stay in the Backlog, and multi-agent
+patterns stay in Vision.*
+
+**Why this ordering:** the first three items are low-cost, high-visibility adoption
+unblockers that reuse infrastructure already in place. The middle block (skills,
+dynamic tool loading, hooks, MCP) is the extensibility core that decides whether
+other people can shape Phelix without forking it. The tail (sensors, eval, sub-agents,
+memory) is depth that only pays off once the surface area above it exists.
+
+### 3.1 — Session resume / continue
+**The single most-expected missing feature.** Everything needed is already persisted
+to SQLite (`SqliteSessionStore`), but `PhelixSession` is created fresh per invocation
+and nothing replays it.
+- `phelix --continue` resumes the most recent session; `phelix --resume <id>` resumes
+  a named session by id. Rehydrate `conversationHistory` from the `turns` table.
+- Depends on the audit's **S-2** note: make `PhelixSession.ConversationHistory` an
+  `ImmutableArray<ChatMessage>` over the mutable `List` first — this is the enabler
+  for both resume and a later fork capability.
+- Wiring + a list/picker, not new infrastructure. Highest leverage in the phase.
+
+### 3.2 — Global tool packaging — `dotnet tool install -g phelix`
+*(moved up from Backlog — it's the first friction a new adopter hits.)*
+No install path exists yet; the harness runs only via `dotnet run --project`. The
+README already promises a global tool as the release mechanism. The app is already
+relocatable (config, session logs, and `AGENTS.md` resolve from `~/.phelix/` and the
+invoker's CWD — no repo-root assumptions), so packaging is metadata, not a refactor.
+- Distribution decision: **.NET global tool** (audience is .NET devs who have the
+  runtime); not self-contained or AOT for the first cut.
+- `Phelix.Cli.csproj`: add `PackAsTool`, `ToolCommandName=phelix`, `PackageId=phelix`,
+  `AssemblyName=phelix`, plus NuGet metadata (version, authors, description, license,
+  repo URL).
+- Validate locally: `dotnet pack -c Release` → `dotnet tool install -g --add-source
+  ./nupkg phelix`, confirm `phelix` and `phelix "<prompt>"` work from an unrelated
+  directory.
+- Later: tag-triggered CI job to pack + push to NuGet (needs a NuGet API key secret).
+- Does **not** require Native AOT. AOT remains a separate future item — it is blocked
+  by YamlDotNet's reflection-based config parser (`FileConfigProvider`) and would need
+  an AOT-safe parser first.
+
+### 3.3 — Custom slash commands
+Only `/status` exists today, hardcoded. User-defined commands are how a developer
+teaches the harness *their* workflow without touching core code.
+- Markdown prompt templates discovered from `~/.phelix/commands/*.md` (global) and
+  per-repo `.phelix/commands/*.md`; filename becomes the command (`review.md` → `/review`).
+- Argument substitution (e.g. `$ARGUMENTS` / positional `$1`) so commands take input.
+- Slash-command dispatch lives in the CLI input loop; resolves a template to a normal
+  user turn. Cheap to build, high perceived polish.
+
+### 3.4 — Skills system
+*(moved from Backlog — the highest-leverage extensibility feature.)* Today a skill is
+a static markdown file (`skills/git-workflow/SKILL.md`) that nothing auto-loads.
+- Skill discovery from `~/.phelix/skills/` (global) **and** per-repo `.phelix/skills/`;
+  each skill is a directory with a `SKILL.md` (name + description frontmatter + body).
+- Inject a cheap name+description catalog into context; a `load_skill` tool pulls the
+  full body on demand (do not preload every skill body).
+- Evaluate each skill empirically with and without — stale or redundant skills hurt
+  performance (see 3.9, Evaluation discipline).
+- Reference: Cursor replaced 15,000 lines of orchestration with a 200-line skill file.
+- **Sequenced with 3.5** — the on-demand catalog pattern is shared.
+
+### 3.5 — Dynamic tool loading
+*(moved from Backlog — most spec-ready item; pairs with Skills.)* All tool schemas are
+registered at startup and re-sent every turn regardless of use. At ~160 tokens per
+tool this is a fixed floor that compounds with every tool added.
+- Replace the startup registry with a lightweight catalog (tool name + one-liner); the
+  agent loads full schemas on demand when it decides it needs a tool.
+- Same catalog-then-load shape as 3.4 — build the two together so the mechanism is
+  shared, not duplicated.
+- Spec written in `docs/decisions/dynamic-tool-loading/spec.md`; no implementation yet.
+- Architectural change with session and approval-gate implications.
+
+### 3.6 — Hooks / lifecycle events
+The extension primitive that unlocks the most for the least core surface area. Lets a
+team enforce behavior *deterministically* instead of trusting the model to remember.
+- Lifecycle events: `SessionStart`, `PreToolUse`, `PostToolUse`, `Stop` (more later).
+- User-configured commands run on each event (config in `config.yaml` or `.phelix/`);
+  `PreToolUse` can block or rewrite a dispatch, `PostToolUse` observes results.
+- **Folds in the backlogged secret scrubber:** a `PostToolUse`/logging-stage hook that
+  pattern-matches secret shapes (API keys, tokens, `Bearer ...`) and blanks them before
+  content reaches the session store. Must not mutate content sent back to the model —
+  scrubbing is a logging concern only.
+
+### 3.7 — MCP client support
+Reconsiders the prior "not in scope" call. MCP is now the de facto way harnesses gain
+tools (GitHub, Postgres, Playwright, internal company servers) without the author
+writing each integration. For a .NET-native harness, "speaks MCP *and* has first-class
+Roslyn" is a genuine differentiator.
+- MCP client that connects to configured servers (stdio + HTTP) and surfaces their
+  tools through the existing `ITool` / `ToolRegistry` seam.
+- Reuses the approval-tier and path-containment machinery; external tools default to
+  `Confirm` tier.
+- Benefits directly from 3.5 (dynamic loading) so external tool schemas don't bloat
+  every turn.
+
+### 3.8 — Plan mode (in core)
+Reconsiders "build as a skill." A read-only planning phase that gates writes behind an
+explicit approval is an expected safety/UX affordance — and a skill can't enforce
+read-only at the dispatch layer the way the core can.
+- New `SessionMode.Plan` alongside `Default` / `AcceptsEdits` / `AllowAll`; in this
+  mode the approval gate denies every non-read tier at dispatch.
+- `--plan` flag and an in-session toggle; exiting plan mode requires explicit user
+  confirmation before any write executes.
+- Leans entirely on the approval-tier + session-mode machinery already in place.
+- Supersedes the backlogged "Structured loop: Plan → Execute → Verify" prompt-only
+  idea, which can ride along as a system-prompt nudge once the mode exists.
+
+### 3.9 — Sensors: build & diagnostics feedback loop
+*(was the standalone "Phase 3 — Sensors"; now sequenced here.)* Phelix's signature
+.NET differentiator: close the loop so build/test/diagnostic results feed back
+automatically instead of the agent re-reading files to guess what broke.
+- Run `dotnet build` / `dotnet test` and surface structured results as `TurnEvent`s
+  (the `TurnEvent` hierarchy was already reserved for this in the session schema).
+- A `roslyn_diagnostics` tool / sensor that returns analyzer + compiler diagnostics
+  for changed files.
+- Feed sensor output back into the next turn as feedforward context.
+
+### 3.10 — Evaluation discipline
+*(moved from Backlog — gates safe tuning of everything above.)* No systematic way to
+compare harness performance with vs. without a skill, prompt change, or tool.
+- A/B harness that replays a fixed task set and reports outcome deltas.
+- Needed before the harness matures beyond personal use — and before the skill library
+  (3.4) grows large enough that regressions hide.
+
+### 3.11 — Sub-agents / task delegation
+Deferred but not designed against. Once skills land, "spawn a focused sub-agent with
+its own context for this search/review" is the next power-user ask.
+- A sub-agent is "another `PhelixSession` with a tool handle," not a rewrite — keep the
+  `PhelixSession` boundary clean so this stays additive.
+- Serial first (delegate → return summary); parallelism and the Reflection/Critic and
+  Orchestrator/Worker/Validator patterns in Vision build on top of this.
+
+### 3.12 — Durable cross-session memory
+*(moved from Backlog — correctly last; depends on the skills layer.)* No cross-session
+memory exists today.
+- A project memory file the agent reads at session start and writes back to (facts,
+  decisions, conventions) — distinct from per-session SQLite history.
+- Pairs with the backlogged Conventions / Rules files idea; design the two schemas
+  together.
+
+---
+
 ## Backlog
-*Good ideas that need a spec and the right moment. Not yet actionable.*
+*Good ideas that need a spec and the right moment. Not yet actionable. Adoption and
+extensibility items have moved to Phase 3; what remains here is per-feature polish and
+deeper R&D that is not on the adoption critical path.*
 
 ### Conventions / Rules files with examples
 No mechanism for per-project behavioral anchors beyond `AGENTS.md`. Other harnesses use richer rule files with worked examples to constrain agent behavior without relying solely on system prompt tuning.
 - `~/.phelix/rules/` or per-repo `.phelix/rules.md` with named conventions and examples
 - Evaluate how Cursor, Gemini, and other harnesses handle this before designing the schema
+- Design alongside **Phase 3.12** (durable memory) — overlapping schema concerns.
 
 ### Agent-facing exception and validation messages
 Exceptions and validation errors are written for human developers. An agent reading them wastes tokens disambiguating intent.
@@ -185,24 +334,6 @@ baked into both the `.jsonl` and `.db` filenames via `SessionContext.FileSlug`
 (`yyyy-MM-dd-<name>-<sessionId>` or `yyyy-MM-dd-<sessionId>` when unnamed) and stored
 as a nullable `session_name` column on every `turns` row. Name is immutable for the
 session lifetime. Spec and implementation in `docs/decisions/session-log-naming/`.
-
-### Token / secret scrubber middleware
-Agent loops inevitably surface environment variables and API keys in tool output and bash commands. Without scrubbing, local SQLite session logs accumulate credentials.
-- Scrubber layer in the tool-result pipeline; fires before any content reaches the session store
-- Pattern-match against common secret shapes (API keys, tokens, `Bearer ...`) and blank them before write
-- Must not mutate content sent back to the model — scrubbing is a logging concern only
-
-### Dynamic tool loading
-All tool schemas are registered at startup and re-sent on every turn regardless of use. At ~160 tokens per tool, this is a fixed floor that compounds with every tool added — measured at 98% of baseline turn cost on a minimal session.
-- Replace the startup registry with a lightweight catalog (tool name + one-liner description)
-- Agent loads full schemas on demand when it decides it needs a tool
-- Spec written in `docs/decisions/dynamic-tool-loading/spec.md`; no implementation yet — most spec-ready backlog item
-- Architectural change with session and approval-gate implications
-
-### Structured loop: Plan → Execute → Verify
-The agent retries from scratch on failure. The right pattern is explicit plan-before-execute.
-- Start with a system prompt change: instruct the agent to write a plan as its first action for non-trivial tasks, then execute step by step
-- No new code required to start
 
 ### BM25 / inverted index for search
 `SearchCodeTool` does O(n) line-by-line file scans. On a large repo this will slow noticeably.
@@ -222,19 +353,6 @@ The agent orients itself by reading raw files — expensive and shallow. A seman
 - Expose via a `search_graph` tool: the agent queries the graph instead of reading raw files
 - Pipeline: detect → extract → build graph → cluster → analyze → export (JSON + optional HTML)
 - Reference: graphify (https://github.com/safishamsi/graphify) — Python/tree-sitter tool that proved the pattern at scale (61.5k stars, 71.5x token reduction on large repos). C# support exists but is surface-level; Roslyn gives significantly deeper semantics. No Python dependency needed.
-
-### Skills system
-No mechanism to externalize expertise or reuse step-by-step instruction sets across sessions.
-- `~/.phelix/skills/` directory; load/invoke mechanism
-- Evaluate each skill empirically with and without — stale or redundant skills hurt performance
-- Reference: Cursor replaced 15,000 lines of orchestration code with a 200-line skill file
-
-### Evaluation discipline
-No systematic way to compare harness performance with vs. without a skill, prompt change, or tool.
-- Needed before the harness matures beyond personal use
-
-### Durable cross-session memory
-No cross-session memory exists. Deferred until after the skills layer is in place.
 
 ---
 
