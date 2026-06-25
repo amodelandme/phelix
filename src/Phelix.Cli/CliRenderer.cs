@@ -2,6 +2,7 @@ using System.Globalization;
 using Spectre.Console;
 using Phelix.Core.Agent;
 using Phelix.Core.Session;
+using System.Text;
 
 namespace Phelix.Cli;
 
@@ -207,13 +208,13 @@ internal static class CliRenderer
         if (args.Count == 0)
             return string.Empty;
 
-        IEnumerable<string> pairs = args.Select(kvp =>
+        StringBuilder sb = new(capacity: args.Count * 24);
+        foreach (KeyValuePair<string, object?> kvp in args)
         {
             string raw   = kvp.Value?.ToString() ?? "null";
             string value = raw.Length > 60 ? raw[..60] + "…" : raw;
-            return $"{Markup.Escape(kvp.Key)}={Markup.Escape(value)}";
-        });
-
-        return " " + string.Join(" ", pairs);
+            sb.Append(' ').Append(Markup.Escape(kvp.Key)).Append('=').Append(Markup.Escape(value));
+        }
+        return sb.ToString();
     }
 }

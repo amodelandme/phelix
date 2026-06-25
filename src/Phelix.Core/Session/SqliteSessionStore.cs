@@ -249,7 +249,7 @@ public sealed class SqliteSessionStore : ISessionStore, IDisposable
 
     void EnsureSchema()
     {
-        SqliteCommand createTurns = _connection.CreateCommand();
+        using SqliteCommand createTurns = _connection.CreateCommand();
         createTurns.CommandText = """
             CREATE TABLE IF NOT EXISTS turns (
                 turn_id                  TEXT NOT NULL PRIMARY KEY,
@@ -268,7 +268,7 @@ public sealed class SqliteSessionStore : ISessionStore, IDisposable
             """;
         createTurns.ExecuteNonQuery();
 
-        SqliteCommand createToolOutputs = _connection.CreateCommand();
+        using SqliteCommand createToolOutputs = _connection.CreateCommand();
         createToolOutputs.CommandText = """
             CREATE VIRTUAL TABLE IF NOT EXISTS tool_outputs USING fts5(
                 turn_id,

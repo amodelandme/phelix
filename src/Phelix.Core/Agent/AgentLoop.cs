@@ -291,10 +291,16 @@ public class AgentLoop(IChatClient chatClient, AgentOptions options, ToolRegistr
             if (message.Role == ChatRole.Tool)
                 continue;
 
-            if (message.Role == ChatRole.Assistant &&
-                message.Contents.Count > 0 &&
-                message.Contents.All(c => c is FunctionCallContent))
-                continue;
+            if (message.Role == ChatRole.Assistant && message.Contents.Count > 0)
+            {
+                bool allCalls = true;
+                foreach (AIContent content in message.Contents)
+                {
+                    if (content is not FunctionCallContent) { allCalls = false; break; }
+                }
+                if (allCalls)
+                    continue;
+            }
 
             contextMessages.Add(message);
         }
