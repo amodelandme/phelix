@@ -7,9 +7,13 @@ namespace Phelix.Core.Tools;
 /// Path traversal is prevented by resolving the requested path to an absolute path and
 /// verifying it falls within <see cref="RootDirectory"/> before any I/O is performed.
 /// </remarks>
-public class ReadFileTool : ITool
+/// <param name="rootDirectory">
+/// Absolute path of the directory that bounds all reads.
+/// Defaults to <see cref="Directory.GetCurrentDirectory"/> when <c>null</c>.
+/// </param>
+public class ReadFileTool(string? rootDirectory = null) : ITool
 {
-    public string RootDirectory { get; }
+    public string RootDirectory { get; } = Path.GetFullPath(rootDirectory ?? Directory.GetCurrentDirectory());
 
     /// <inheritdoc/>
     public string Name => "read_file";
@@ -19,15 +23,6 @@ public class ReadFileTool : ITool
 
     /// <inheritdoc/>
     public ApprovalTier ApprovalTier => ApprovalTier.Auto;
-
-    /// <param name="rootDirectory">
-    /// Absolute path of the directory that bounds all reads.
-    /// Defaults to <see cref="Directory.GetCurrentDirectory"/> when <c>null</c>.
-    /// </param>
-    public ReadFileTool(string? rootDirectory = null)
-    {
-        RootDirectory = Path.GetFullPath(rootDirectory ?? Directory.GetCurrentDirectory());
-    }
 
     /// <inheritdoc/>
     /// <remarks>

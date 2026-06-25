@@ -10,16 +10,27 @@ namespace Phelix.Core.Tools;
 /// Results are sorted lexicographically and capped at <c>max_results</c>.
 /// Directories named in <see cref="ExcludedDirectories"/> are never included in results.
 /// </remarks>
-public class ListFilesTool : ITool
+/// <param name="rootDirectory">
+/// Absolute path to root all searches against.
+/// Defaults to <see cref="Directory.GetCurrentDirectory"/> when <c>null</c>.
+/// </param>
+/// <param name="excludedDirectories">
+/// Directory segment names to exclude from results.
+/// Defaults to <c>{ ".git", "bin", "obj" }</c> when <c>null</c>.
+/// Pass an empty set to disable all exclusions.
+/// </param>
+public class ListFilesTool(
+    string? rootDirectory = null,
+    IReadOnlySet<string>? excludedDirectories = null) : ITool
 {
     const int DefaultMaxResults = 200;
 
     static readonly IReadOnlySet<string> DefaultExcludedDirectories =
         new HashSet<string>(StringComparer.Ordinal) { ".git", "bin", "obj" };
 
-    public string RootDirectory { get; }
+    public string RootDirectory { get; } = Path.GetFullPath(rootDirectory ?? Directory.GetCurrentDirectory());
 
-    public IReadOnlySet<string> ExcludedDirectories { get; }
+    public IReadOnlySet<string> ExcludedDirectories { get; } = excludedDirectories ?? DefaultExcludedDirectories;
 
     /// <inheritdoc/>
     public string Name => "list_files";
@@ -29,21 +40,6 @@ public class ListFilesTool : ITool
 
     /// <inheritdoc/>
     public ApprovalTier ApprovalTier => ApprovalTier.Auto;
-
-    /// <param name="rootDirectory">
-    /// Absolute path to root all searches against.
-    /// Defaults to <see cref="Directory.GetCurrentDirectory"/> when <c>null</c>.
-    /// </param>
-    /// <param name="excludedDirectories">
-    /// Directory segment names to exclude from results.
-    /// Defaults to <c>{ ".git", "bin", "obj" }</c> when <c>null</c>.
-    /// Pass an empty set to disable all exclusions.
-    /// </param>
-    public ListFilesTool(string? rootDirectory = null, IReadOnlySet<string>? excludedDirectories = null)
-    {
-        RootDirectory = Path.GetFullPath(rootDirectory ?? Directory.GetCurrentDirectory());
-        ExcludedDirectories = excludedDirectories ?? DefaultExcludedDirectories;
-    }
 
     /// <inheritdoc/>
     /// <remarks>

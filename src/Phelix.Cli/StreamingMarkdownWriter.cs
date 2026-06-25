@@ -11,7 +11,7 @@ namespace Phelix.Cli;
 /// </remarks>
 internal sealed class StreamingMarkdownWriter
 {
-    readonly StringBuilder buffer = new();
+    readonly StringBuilder buffer = new(capacity: 4096);
     readonly IAnsiConsole console;
     readonly bool isRedirected;
 
